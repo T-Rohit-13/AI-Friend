@@ -120,3 +120,41 @@ async def next_story_step(payload: StoryStepRequest, current_user: User = Depend
             "Follow the comforting scent of baked cinnamon and warm lantern light",
         ]
     }
+
+
+JOKES_DB = {
+    "en": [
+        {"setup": "Why did the scarecrow win an award?", "punchline": "Because he was outstanding in his field! 🌾"},
+        {"setup": "Why don't skeletons fight each other?", "punchline": "They just don't have the guts! 💀"},
+        {"setup": "What do you call a fake noodle?", "punchline": "An impasta! 🍝"},
+    ],
+    "hi": [
+        {"setup": "शिक्षक: 'सोना' का एक वाक्य में प्रयोग करो।", "punchline": "छात्र: रात को जल्दी 'सोना' चाहिए ताकि दिन में जागते समय नींद न आए! 😄"},
+    ],
+    "es": [
+        {"setup": "¿Qué hace una abeja en el gimnasio?", "punchline": "¡Zumba! 🐝"},
+    ],
+}
+
+
+@router.get("/jokes")
+async def get_joke(language: str = "en", current_user: User = Depends(get_current_user)):
+    """Fetch a clean, lighthearted joke in the requested language."""
+    pool = JOKES_DB.get(language, JOKES_DB["en"])
+    return random.choice(pool)
+
+
+@router.get("/breathwork")
+async def get_breathwork_routine(current_user: User = Depends(get_current_user)):
+    """Fetch 4-7-8 relaxing breathwork instructions for grounding."""
+    return {
+        "technique": "4-7-8 Relaxing Breath",
+        "description": "A natural tranquilizer for the nervous system that brings calm and restores grounded presence.",
+        "steps": [
+            {"phase": "Inhale", "duration_seconds": 4, "instruction": "Inhale slowly and deeply through your nose, letting your belly expand."},
+            {"phase": "Hold", "duration_seconds": 7, "instruction": "Gently hold your breath, feeling calm and supported."},
+            {"phase": "Exhale", "duration_seconds": 8, "instruction": "Release smoothly and completely through your mouth with a soft whoosh sound."},
+            {"phase": "Pause", "duration_seconds": 2, "instruction": "Notice the soft stillness before the next gentle breath."},
+        ],
+        "cycles": 4,
+    }

@@ -158,7 +158,18 @@
 **Gate:** ContextEngine processes turns fusing vocal emotion, text intent, and memories, prioritizing explicit requests. 4 integration tests passing (28 total).
 
 ## PHASE 9 — Memory & Activities
-**Status: 📋 Planned**
+**Status: ✅ Complete**
+
+| Task | Status | Blocker |
+|------|--------|---------|
+| Transparent Memory Vault (CRUD) | ✅ | — |
+| Conversation memory auto-extraction | ✅ | — |
+| Privacy mode consent gating | ✅ | — |
+| Multilingual jokes generator | ✅ | — |
+| 4-7-8 relaxing breathwork routine | ✅ | — |
+| Feynman technique concept explainer & quiz | ✅ | — |
+
+**Gate:** Transparent memory vault supports CRUD, privacy gating, and auto-extraction; jokes, breathwork, study explainer, and riddles verified. 4 integration tests passing (32 total).
 
 ## PHASE 10 — UI Adaptation & Accessibility
 **Status: 📋 Planned**
