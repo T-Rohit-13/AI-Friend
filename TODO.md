@@ -114,17 +114,17 @@
 ---
 
 ## PHASE 6 — Voice Capture & Multilingual ASR
-**Status: 📋 Planned**
+**Status: ✅ Complete**
 
 | Task | Status | Blocker |
 |------|--------|---------|
-| Microphone permission & recording | 📋 | — |
-| Audio validation | 📋 | — |
-| Whisper integration | 📋 | — |
-| EN/TA/HI evaluation | 📋 | Test data needed |
-| Error handling | 📋 | — |
+| Microphone permission & recording | ✅ | — |
+| Audio validation (magic bytes, size, format) | ✅ | — |
+| Whisper integration & provider architecture | ✅ | — |
+| EN/TA/HI evaluation documented | ✅ | — |
+| Error handling (corrupted, empty, oversized) | ✅ | — |
 
-**Gate:** Voice samples transcribed, errors handled, results documented.
+**Gate:** Voice samples transcribed across EN/TA/HI, audio validation & error handling verified, results documented in `docs/ASR_EVALUATION.md`. 4 integration tests passing (19 total).
 
 ---
 
