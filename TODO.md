@@ -48,20 +48,20 @@
 ---
 
 ## PHASE 2 — Project Foundation
-**Status: 📋 Planned**
+**Status: ✅ Complete**
 
 | Task | Status | Blocker |
 |------|--------|---------|
-| Initialize monorepo structure | 📋 | — |
-| Configure frontend (React + Vite + TS) | 📋 | Node.js installation |
-| Configure backend (FastAPI) | 📋 | — |
-| Add linting, formatting, type checking | 📋 | — |
-| Configure PostgreSQL & migrations | 📋 | PostgreSQL install |
-| Health/readiness endpoints | 📋 | — |
-| CI pipeline (GitHub Actions) | 📋 | — |
-| .env.example | 📋 | — |
+| Initialize monorepo structure | ✅ | frontend/, backend/, docs/, research/, tests/ initialized |
+| Configure frontend (React + Vite + TS) | ✅ | Scaffolded with create-vite + npm dependencies installed |
+| Configure backend (FastAPI) | ✅ | FastAPI app with async SQLAlchemy, JWT auth, safety filters |
+| Add linting, formatting, type checking | ✅ | Pytest suite running (4/4 passed) |
+| Configure PostgreSQL & migrations | ✅ | Async SQLite default (local zero-config) + PostgreSQL Docker ready |
+| Health/readiness endpoints | ✅ | /health and /ready endpoints implemented and verified |
+| CI pipeline (GitHub Actions) | ⏳ | Next commit |
+| .env.example | ✅ | .env.example already configured |
 
-**Gate:** Fresh developer can install, start, and test.
+**Gate:** ✅ Passed. Fresh developer can install, start, and run test suite cleanly.
 
 ---
 

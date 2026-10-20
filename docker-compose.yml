@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Relational Database with pgvector support
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: aifriend-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aifriend
+      POSTGRES_PASSWORD: aifriend_dev_password
+      POSTGRES_DB: aifriend
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aifriend -d aifriend"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aifriend-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://aifriend:aifriend_dev_password@postgres:5432/aifriend
+      - LLM_PROVIDER=mock
+      - PORT=8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # React Frontend (Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aifriend-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
