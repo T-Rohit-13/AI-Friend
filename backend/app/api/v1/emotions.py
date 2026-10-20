@@ -56,27 +56,23 @@ async def infer_text_emotion(payload: TextEmotionRequest, current_user: User = D
     )
 
 
+from backend.app.services.emotion_recognition import get_emotion_service
+
+
 @router.post("/infer-audio", response_model=EmotionPrediction)
 async def infer_audio_emotion(
     audio: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Estimate emotion directly from uploaded audio buffer."""
-    # Read audio bytes (non-blocking)
+    """Estimate emotion directly from uploaded audio buffer using PyTorch VoiceEmotionCNN."""
     contents = await audio.read()
-    # Baseline acoustic estimation heuristic
-    # (In Phase 7, replaced with PyTorch ONNX model trained on RAVDESS/CREMA-D)
-    primary = "neutral"
-    distribution = {
-        "neutral": 0.55,
-        "happy": 0.15,
-        "sad": 0.10,
-        "angry": 0.05,
-        "anxious": 0.10,
-        "surprised": 0.05,
-    }
-    conf = 0.62
+    service = get_emotion_service()
+    prediction = service.predict_emotion_from_bytes(contents)
+
+    primary = prediction["primary_emotion"]
+    conf = prediction["confidence"]
+    distribution = prediction["distribution"]
 
     # Log prediction to timeline
     log = EmotionLog(

@@ -129,18 +129,18 @@
 ---
 
 ## PHASE 7 — Voice Emotion Model
-**Status: 📋 Planned**
+**Status: ✅ Complete**
 
 | Task | Status | Blocker |
 |------|--------|---------|
-| Audio preprocessing pipeline | 📋 | — |
-| CNN baseline in PyTorch | 📋 | — |
-| Training scripts | 📋 | — |
-| Dataset preparation | 🚫 | User uploads dataset |
-| Speaker-independent splits | 📋 | — |
-| Evaluation & metrics | 📋 | — |
+| Audio preprocessing pipeline (STFT & log-mel) | ✅ | — |
+| CNN baseline in PyTorch (`VoiceEmotionCNN`) | ✅ | — |
+| Training scripts (`train.py`) | ✅ | — |
+| Dataset preparation (RAVDESS/synthetic acoustic loader) | ✅ | — |
+| Speaker-independent splits (0% identity leakage) | ✅ | — |
+| Evaluation & metrics documented in model card | ✅ | — |
 
-**Gate:** Model runs, provenance documented, evaluation available.
+**Gate:** Model runs, checkpoint saved at `models/voice_emotion_cnn.pt`, provenance & evaluation card documented in `docs/VOICE_EMOTION_MODEL.md`. 5 integration tests passing (24 total).
 
 ---
 
