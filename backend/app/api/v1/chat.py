@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -60,10 +61,12 @@ async def create_session(
 @router.get("/sessions/{session_id}/messages", response_model=List[MessageResponse])
 async def get_messages(
     session_id: str,
+    limit: int = 50,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Fetch message history for a given session."""
+    """Fetch paginated message history for a given session."""
     sess_query = select(ChatSession).where(
         ChatSession.id == session_id,
         ChatSession.user_id == current_user.id,
@@ -77,10 +80,82 @@ async def get_messages(
         select(Message)
         .where(Message.session_id == session_id)
         .order_by(Message.created_at.asc())
+        .offset(offset)
+        .limit(limit)
     )
     msg_res = await db.execute(msg_query)
     messages = msg_res.scalars().all()
     return [MessageResponse.model_validate(m) for m in messages]
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete a conversation session and all its messages."""
+    sess_query = select(ChatSession).where(
+        ChatSession.id == session_id,
+        ChatSession.user_id == current_user.id,
+    )
+    res = await db.execute(sess_query)
+    session = res.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    await db.delete(session)
+    await db.commit()
+    return None
+
+
+@router.get("/sessions/{session_id}/export")
+async def export_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export complete session transcript for GDPR data portability."""
+    sess_query = select(ChatSession).where(
+        ChatSession.id == session_id,
+        ChatSession.user_id == current_user.id,
+    )
+    res = await db.execute(sess_query)
+    session = res.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    msg_query = (
+        select(Message)
+        .where(Message.session_id == session_id)
+        .order_by(Message.created_at.asc())
+    )
+    msg_res = await db.execute(msg_query)
+    messages = msg_res.scalars().all()
+
+    return {
+        "export_date": datetime.now(timezone.utc).isoformat(),
+        "user_id": current_user.id,
+        "session": {
+            "id": session.id,
+            "title": session.title,
+            "persona": session.persona,
+            "language": session.language,
+            "created_at": session.created_at.isoformat(),
+        },
+        "message_count": len(messages),
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "companion_emotion": m.companion_emotion,
+                "detected_emotion": m.detected_emotion,
+                "timestamp": m.created_at.isoformat(),
+            }
+            for m in messages
+        ],
+    }
 
 
 @router.post("/sessions/{session_id}/messages", response_model=ChatTurnResponse)

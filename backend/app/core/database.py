@@ -50,6 +50,7 @@ async def init_db() -> None:
     import backend.app.models.message  # noqa: F401
     import backend.app.models.memory  # noqa: F401
     import backend.app.models.emotion  # noqa: F401
+    import backend.app.models.preference  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from backend.app.core.config import settings
 from backend.app.core.database import init_db
+from backend.app.core.rate_limit import RateLimitMiddleware
 from backend.app.api.v1 import api_v1_router
 
 
@@ -26,6 +27,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Rate Limiting Middleware
+app.add_middleware(RateLimitMiddleware)
 
 # CORS Middleware
 app.add_middleware(

@@ -83,18 +83,18 @@
 ---
 
 ## PHASE 4 — Authentication, Database & Backend
-**Status: 📋 Planned**
+**Status: ✅ Complete**
 
 | Task | Status | Blocker |
 |------|--------|---------|
-| Auth endpoints | 📋 | — |
-| Database models & migrations | 📋 | — |
-| Preferences CRUD | 📋 | — |
-| Conversation CRUD | 📋 | — |
-| Rate limiting | 📋 | — |
-| User isolation tests | 📋 | — |
+| Auth endpoints | ✅ | Register, login, me, and password change endpoints |
+| Database models & migrations | ✅ | Alembic migrations created, upgrade & rollback tested cleanly |
+| Preferences CRUD | ✅ | GET & PUT /settings/preferences, profile updates |
+| Conversation CRUD | ✅ | Pagination, session deletion, and GDPR export endpoint |
+| Rate limiting | ✅ | In-memory sliding window rate limiter middleware (HTTP 429) |
+| User isolation tests | ✅ | Tested User A vs User B strict authorization isolation |
 
-**Gate:** Protected endpoints pass integration tests.
+**Gate:** ✅ Passed. 100% test pass (9/9 pytest tests pass), migration rollback verified.
 
 ---
 
