@@ -1,0 +1,491 @@
+openapi: 3.1.0
+info:
+  title: AI Friend — Multilingual Emotional Companion API
+  version: 1.0.0
+  description: >
+    Production REST & WebSocket API specification for AI Friend.
+    Provides conversational companionship, multilingual streaming chat,
+    speech-to-text, neural TTS, acoustic emotion estimation, interactive games,
+    study tutoring, transparent user memory management, and ironclad crisis safety protocols.
+servers:
+  - url: http://localhost:8000
+    description: Local Development Server
+  - url: https://api.aifriend.local
+    description: Production Cluster
+
+paths:
+  # ==========================================
+  # SYSTEM & HEALTH
+  # ==========================================
+  /health:
+    get:
+      summary: Liveness Probe
+      description: Returns service liveness state.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "ok" }
+                  timestamp: { type: string, format: date-time }
+                  version: { type: string, example: "1.0.0" }
+
+  /ready:
+    get:
+      summary: Readiness Probe
+      description: Verifies database connectivity, ML model availability, and provider status.
+      responses:
+        '200':
+          description: Service is ready to receive traffic
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  database: { type: boolean, example: true }
+                  llm_provider: { type: string, example: "groq-ready" }
+                  emotion_model: { type: boolean, example: true }
+                  status: { type: string, example: "ready" }
+        '503':
+          description: One or more critical dependencies unavailable
+
+  # ==========================================
+  # AUTHENTICATION & SESSIONS
+  # ==========================================
+  /api/v1/auth/register:
+    post:
+      summary: Register User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, display_name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                display_name: { type: string, minLength: 2, maxLength: 50 }
+                preferred_language: { type: string, default: "en", enum: [en, es, hi, fr, de, zh] }
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          description: Validation error or email already registered
+
+  /api/v1/auth/login:
+    post:
+      summary: Authenticate User
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          description: Invalid credentials
+
+  /api/v1/auth/me:
+    get:
+      summary: Current User Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  # ==========================================
+  # CONVERSATION & CHAT
+  # ==========================================
+  /api/v1/chat/sessions:
+    get:
+      summary: List Conversation Sessions
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of active and archived sessions
+    post:
+      summary: Create New Chat Session
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                persona: { type: string, default: "friendly_companion" }
+                language: { type: string, default: "en" }
+      responses:
+        '201':
+          description: Session created
+
+  /api/v1/chat/sessions/{sessionId}/messages:
+    get:
+      summary: Get Session Message History
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Paginated message list
+    post:
+      summary: Send Message & Receive Companion Response
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+                mode: { type: string, default: "chat", enum: [chat, voice, game, study] }
+                detected_emotion: { type: string }
+                emotion_confidence: { type: number, minimum: 0, maximum: 1 }
+      responses:
+        '200':
+          description: AI Companion response with emotion & safety metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatTurnResponse'
+        '400':
+          description: Invalid turn or safety alert triggered
+
+  # ==========================================
+  # VOICE & SPEECH
+  # ==========================================
+  /api/v1/voice/transcribe:
+    post:
+      summary: Speech-to-Text Transcription
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary }
+                language: { type: string, example: "en" }
+      responses:
+        '200':
+          description: Transcription result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+                  language: { type: string }
+                  duration_seconds: { type: number }
+
+  /api/v1/voice/synthesize:
+    post:
+      summary: Text-to-Speech Synthesis
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string }
+                voice_id: { type: string }
+                language: { type: string, default: "en" }
+                rate: { type: number, default: 1.0 }
+                pitch: { type: number, default: 1.0 }
+      responses:
+        '200':
+          description: Audio stream (WAV or MP3)
+          content:
+            audio/mpeg:
+              schema: { type: string, format: binary }
+            audio/wav:
+              schema: { type: string, format: binary }
+
+  # ==========================================
+  # EMOTION ESTIMATION
+  # ==========================================
+  /api/v1/emotions/infer-audio:
+    post:
+      summary: Infer Acoustic Emotion from Audio Buffer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio: { type: string, format: binary }
+      responses:
+        '200':
+          description: Predicted emotion distribution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmotionPrediction'
+
+  /api/v1/emotions/history:
+    get:
+      summary: User Emotion Trends & Reflections
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, default: 7 }
+      responses:
+        '200':
+          description: Aggregated mood insights and trends
+
+  # ==========================================
+  # GAMES & ENTERTAINMENT
+  # ==========================================
+  /api/v1/games/riddles/next:
+    get:
+      summary: Fetch Next Riddle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: difficulty
+          in: query
+          schema: { type: string, enum: [easy, medium, hard], default: medium }
+        - name: language
+          in: query
+          schema: { type: string, default: en }
+      responses:
+        '200':
+          description: Riddle object
+
+  /api/v1/games/trivia:
+    get:
+      summary: Fetch Trivia Quiz Question
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string, default: general }
+      responses:
+        '200':
+          description: Quiz question with multiple choices
+
+  /api/v1/games/story/step:
+    post:
+      summary: Co-Creative Storytelling Next Beat
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_input, story_id]
+              properties:
+                story_id: { type: string }
+                user_input: { type: string }
+      responses:
+        '200':
+          description: Next narrative paragraph and suggested choices
+
+  # ==========================================
+  # STUDY & LEARNING
+  # ==========================================
+  /api/v1/study/explain:
+    post:
+      summary: Explain Complex Concept (Feynman / ELI5 Technique)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic]
+              properties:
+                topic: { type: string }
+                level: { type: string, enum: [eli5, high_school, university, expert], default: eli5 }
+                language: { type: string, default: en }
+      responses:
+        '200':
+          description: Structured explanation with analogies and check-questions
+
+  /api/v1/study/quiz:
+    post:
+      summary: Generate Practice Flashcards / Quiz for a Topic
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject]
+              properties:
+                subject: { type: string }
+                num_questions: { type: integer, default: 5 }
+      responses:
+        '200':
+          description: Generated quiz set
+
+  # ==========================================
+  # USER MEMORIES (TRANSPARENT VAULT)
+  # ==========================================
+  /api/v1/memories:
+    get:
+      summary: View All Stored Memories & Personal Facts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Complete list of user facts remembered by the companion
+    post:
+      summary: Explicitly Add a Personal Fact / Memory
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fact]
+              properties:
+                fact: { type: string }
+                category: { type: string, default: "preference" }
+      responses:
+        '201':
+          description: Memory added
+
+  /api/v1/memories/{memoryId}:
+    delete:
+      summary: Permanently Delete a Stored Memory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: memoryId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Memory purged permanently
+
+  /api/v1/memories/clear:
+    delete:
+      summary: Purge Entire Memory Vault (GDPR / Right to Forget)
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: All user memories permanently erased
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AuthTokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        token_type: { type: string, example: "bearer" }
+        expires_in: { type: integer, example: 3600 }
+        user: { $ref: '#/components/schemas/UserProfile' }
+
+    UserProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        display_name: { type: string }
+        preferred_language: { type: string, example: "en" }
+        created_at: { type: string, format: date-time }
+
+    ChatTurnResponse:
+      type: object
+      properties:
+        message_id: { type: string, format: uuid }
+        role: { type: string, example: "assistant" }
+        content: { type: string }
+        language: { type: string, example: "en" }
+        audio_url: { type: string, nullable: true }
+        companion_emotion: { type: string, example: "warm" }
+        safety_notice:
+          type: object
+          nullable: true
+          properties:
+            is_crisis: { type: boolean }
+            crisis_helpline: { type: string }
+            resources: { type: array, items: { type: string } }
+
+    EmotionPrediction:
+      type: object
+      properties:
+        primary_emotion: { type: string, enum: [neutral, happy, sad, angry, anxious, surprised] }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        distribution:
+          type: object
+          properties:
+            neutral: { type: number }
+            happy: { type: number }
+            sad: { type: number }
+            angry: { type: number }
+            anxious: { type: number }
+            surprised: { type: number }

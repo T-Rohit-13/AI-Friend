@@ -1,0 +1,86 @@
+/**
+ * AI Friend Design Tokens — CSS Custom Properties
+ * Loaded into frontend/index.css as the core theme variables.
+ */
+
+:root {
+  /* Fonts */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Primary Brand - Calming Biophilic Teal */
+  --color-primary-50: #f0fdfa;
+  --color-primary-100: #ccfbf1;
+  --color-primary-400: #2dd4bf;
+  --color-primary-500: #14b8a6;
+  --color-primary-600: #0d9488;
+  --color-primary-700: #0f766e;
+
+  /* Warm Accent - Friendly Amber */
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+
+  /* Dynamic Emotion Colors */
+  --emotion-neutral: #94a3b8;
+  --emotion-neutral-glow: rgba(148, 163, 184, 0.35);
+
+  --emotion-happy: #fbbf24;
+  --emotion-happy-glow: rgba(251, 191, 36, 0.4);
+
+  --emotion-sad: #60a5fa;
+  --emotion-sad-glow: rgba(96, 165, 250, 0.35);
+
+  --emotion-angry: #818cf8;
+  --emotion-angry-glow: rgba(129, 140, 248, 0.4);
+
+  --emotion-anxious: #34d399;
+  --emotion-anxious-glow: rgba(52, 211, 153, 0.4);
+
+  --emotion-surprised: #a78bfa;
+  --emotion-surprised-glow: rgba(167, 139, 250, 0.4);
+
+  /* Safety & Crisis */
+  --safety-crisis-red: #ef4444;
+  --safety-crisis-bg: #7f1d1d;
+  --safety-crisis-border: #f87171;
+
+  /* Active Dynamic Emotion (Modified dynamically via JS/State) */
+  --current-emotion-color: var(--emotion-neutral);
+  --current-emotion-glow: var(--emotion-neutral-glow);
+
+  /* Animation Timings */
+  --ease-natural: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --transition-color: color 300ms var(--ease-natural), background-color 300ms var(--ease-natural), border-color 300ms var(--ease-natural);
+  --transition-ambient: all 600ms var(--ease-natural);
+}
+
+/* Dark Mode (Default for AI Friend) */
+[data-theme='dark'], :root:not([data-theme='light']) {
+  --bg-canvas: #0b0f19;
+  --bg-surface: #131b2e;
+  --bg-surface-elevated: #1e293b;
+  --border-subtle: #1e293b;
+  --border-visible: #334155;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --bubble-user: #0f766e;
+  --bubble-assistant: #1e293b;
+}
+
+/* Light Mode */
+[data-theme='light'] {
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f1f5f9;
+  --border-subtle: #f1f5f9;
+  --border-visible: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --bubble-user: #14b8a6;
+  --bubble-assistant: #f1f5f9;
+}
