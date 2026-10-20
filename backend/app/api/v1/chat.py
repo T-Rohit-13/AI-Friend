@@ -213,49 +213,23 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # 4. Safety Screening
-    is_flagged, direct_reply, safety_notice = evaluate_safety(
-        payload.content,
+    # 4. Context Engine Turn Processing
+    from backend.app.services.context_engine import ContextEngine
+
+    turn_result = await ContextEngine.process_turn(
+        user_message=payload.content,
+        session_id=session.id,
         user_language=session.language,
+        persona=session.persona,
+        vocal_emotion=payload.detected_emotion,
+        text_emotion=None,
+        memories=memories,
+        history=history_list,
     )
 
-    # Emotional adaptation mapping
-    emotion_map = {
-        "sad": "compassionate",
-        "anxious": "grounded",
-        "tired": "peaceful",
-        "joyful": "celebratory",
-        "angry": "calm",
-        "neutral": "warm",
-    }
-    user_emo = (payload.detected_emotion or "neutral").lower()
-    companion_emotion = "compassionate" if (safety_notice and safety_notice.is_crisis) else emotion_map.get(user_emo, "warm")
-
-    if is_flagged and direct_reply:
-        reply_content = direct_reply
-    else:
-        # 5. Behaviour Router & Prompt Assembly
-        system_prompt = BehaviourRouter.build_system_prompt(
-            persona=session.persona,
-            language=session.language,
-            detected_emotion=payload.detected_emotion,
-            memories=memories,
-        )
-        assembled_messages = BehaviourRouter.assemble_messages(
-            system_prompt=system_prompt,
-            history=history_list,
-            new_user_message=payload.content,
-            max_turns=settings.MAX_HISTORY_TURNS,
-        )
-
-        # 6. LLM Generation
-        llm = get_llm_client()
-        reply_content = await llm.generate_response(
-            messages=assembled_messages,
-            language=session.language,
-            detected_emotion=payload.detected_emotion,
-            persona=session.persona,
-        )
+    reply_content = turn_result["content"]
+    companion_emotion = turn_result["companion_emotion"]
+    safety_notice = turn_result["safety_notice"]
 
     # 7. Save Assistant Message
     assistant_msg = Message(
