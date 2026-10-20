@@ -66,19 +66,19 @@
 ---
 
 ## PHASE 3 — Frontend Shell & Design System
-**Status: 📋 Planned**
+**Status: ✅ Complete**
 
 | Task | Status | Blocker |
 |------|--------|---------|
-| App shell & routing | 📋 | — |
-| Chat layout | 📋 | — |
-| Settings UI | 📋 | — |
-| Theme system | 📋 | — |
-| Accessibility | 📋 | — |
-| Loading/error/empty states | 📋 | — |
-| Typed API client | 📋 | — |
+| App shell & routing | ✅ | Navbar, responsive modes, hero emotional avatar |
+| Chat layout | ✅ | ChatView with glassmorphism, prompt pills, read-aloud |
+| Settings UI | ✅ | Persona selection, multilingual selector, audio controls |
+| Theme system | ✅ | Low-arousal dark mode + light mode with CSS custom properties |
+| Accessibility | ✅ | WCAG 2.1 AA compliant contrast and semantic controls |
+| Loading/error/empty states | ✅ | Polished reflective animations & crisis emergency cards |
+| Typed API client | ✅ | Frontend API client with resilient offline demo fallback |
 
-**Gate:** Frontend works on all screen sizes, no inert controls.
+**Gate:** ✅ Passed. Frontend verified across all views with browser testing and 0 inert controls.
 
 ---
 
