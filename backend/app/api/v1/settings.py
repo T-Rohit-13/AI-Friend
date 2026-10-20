@@ -101,3 +101,17 @@ async def change_password(
     current_user.hashed_password = get_password_hash(payload.new_password)
     await db.commit()
     return {"message": "Password changed successfully."}
+
+
+@router.delete("/account", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    GDPR Article 17 Right to Erasure:
+    Permanently deletes user account and all cascaded data (sessions, messages, memories, preferences).
+    """
+    await db.delete(current_user)
+    await db.commit()
+    return None
