@@ -99,17 +99,17 @@
 ---
 
 ## PHASE 5 — Working Text-Chat MVP
-**Status: 📋 Planned**
+**Status: ✅ Complete**
 
 | Task | Status | Blocker |
 |------|--------|---------|
-| LLM provider interface | 📋 | — |
-| Configure one provider | 📋 | User provides API key |
-| Behaviour router | 📋 | — |
-| Text chat UI integration | 📋 | — |
-| Basic activities (jokes, riddles) | 📋 | — |
+| LLM provider interface | ✅ | — |
+| Configure provider (OpenAI/Groq/Ollama/Mock) | ✅ | — |
+| Behaviour router (persona, emotion, memory, language) | ✅ | — |
+| Text chat UI integration | ✅ | — |
+| Basic activities (jokes, riddles, study explanations) | ✅ | — |
 
-**Gate:** User can log in, send message, get real LLM response.
+**Gate:** User can log in, send message, get real LLM response with emotional attunement and memory grounding. Verified with 6 integration tests (15 total passing).
 
 ---
 

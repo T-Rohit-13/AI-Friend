@@ -158,6 +158,13 @@ async def export_session(
     }
 
 
+from fastapi.responses import StreamingResponse
+import json
+from backend.app.core.config import settings
+from backend.app.models.memory import UserMemory
+from backend.app.services.behaviour_router import BehaviourRouter
+
+
 @router.post("/sessions/{session_id}/messages", response_model=ChatTurnResponse)
 async def send_message(
     session_id: str,
@@ -165,7 +172,7 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a user message, evaluate safety & emotion, and generate the companion reply."""
+    """Send a user message, evaluate safety & emotion, and generate the companion reply with multi-turn context."""
     sess_query = select(ChatSession).where(
         ChatSession.id == session_id,
         ChatSession.user_id == current_user.id,
@@ -175,7 +182,28 @@ async def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # 1. Save User Message
+    # 1. Fetch recent message history for multi-turn context
+    history_query = (
+        select(Message)
+        .where(Message.session_id == session.id)
+        .order_by(Message.created_at.desc())
+        .limit(settings.MAX_HISTORY_TURNS)
+    )
+    hist_res = await db.execute(history_query)
+    prior_messages = list(reversed(hist_res.scalars().all()))
+    history_list = [{"role": m.role, "content": m.content} for m in prior_messages]
+
+    # 2. Fetch active transparent memories for grounding
+    mem_query = (
+        select(UserMemory)
+        .where(UserMemory.user_id == current_user.id, UserMemory.is_active == True)
+        .order_by(UserMemory.created_at.desc())
+        .limit(5)
+    )
+    mem_res = await db.execute(mem_query)
+    memories = [m.fact for m in mem_res.scalars().all()]
+
+    # 3. Save User Message
     user_msg = Message(
         session_id=session.id,
         role="user",
@@ -185,27 +213,51 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # 2. Safety Screening
+    # 4. Safety Screening
     is_flagged, direct_reply, safety_notice = evaluate_safety(
         payload.content,
         user_language=session.language,
     )
 
-    companion_emotion = "compassionate" if (safety_notice and safety_notice.is_crisis) else "warm"
+    # Emotional adaptation mapping
+    emotion_map = {
+        "sad": "compassionate",
+        "anxious": "grounded",
+        "tired": "peaceful",
+        "joyful": "celebratory",
+        "angry": "calm",
+        "neutral": "warm",
+    }
+    user_emo = (payload.detected_emotion or "neutral").lower()
+    companion_emotion = "compassionate" if (safety_notice and safety_notice.is_crisis) else emotion_map.get(user_emo, "warm")
 
     if is_flagged and direct_reply:
         reply_content = direct_reply
     else:
-        # 3. LLM Generation
+        # 5. Behaviour Router & Prompt Assembly
+        system_prompt = BehaviourRouter.build_system_prompt(
+            persona=session.persona,
+            language=session.language,
+            detected_emotion=payload.detected_emotion,
+            memories=memories,
+        )
+        assembled_messages = BehaviourRouter.assemble_messages(
+            system_prompt=system_prompt,
+            history=history_list,
+            new_user_message=payload.content,
+            max_turns=settings.MAX_HISTORY_TURNS,
+        )
+
+        # 6. LLM Generation
         llm = get_llm_client()
         reply_content = await llm.generate_response(
-            messages=[{"role": "user", "content": payload.content}],
+            messages=assembled_messages,
             language=session.language,
             detected_emotion=payload.detected_emotion,
             persona=session.persona,
         )
 
-    # 4. Save Assistant Message
+    # 7. Save Assistant Message
     assistant_msg = Message(
         session_id=session.id,
         role="assistant",
@@ -224,3 +276,51 @@ async def send_message(
         companion_emotion=companion_emotion,
         safety_notice=safety_notice,
     )
+
+
+@router.post("/sessions/{session_id}/stream")
+async def stream_chat_turn(
+    session_id: str,
+    payload: MessageCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream assistant response chunks via Server-Sent Events (SSE)."""
+    sess_query = select(ChatSession).where(
+        ChatSession.id == session_id,
+        ChatSession.user_id == current_user.id,
+    )
+    sess_res = await db.execute(sess_query)
+    session = sess_res.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Safety check first
+    is_flagged, direct_reply, safety_notice = evaluate_safety(
+        payload.content,
+        user_language=session.language,
+    )
+
+    async def event_generator():
+        if is_flagged and direct_reply:
+            yield f"data: {json.dumps({'chunk': direct_reply, 'is_crisis': True})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        # Prepare messages
+        system_prompt = BehaviourRouter.build_system_prompt(
+            persona=session.persona,
+            language=session.language,
+            detected_emotion=payload.detected_emotion,
+        )
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": payload.content}]
+        llm = get_llm_client()
+
+        full_reply = []
+        async for token in llm.stream_response(messages, language=session.language, detected_emotion=payload.detected_emotion, persona=session.persona):
+            full_reply.append(token)
+            yield f"data: {json.dumps({'chunk': token})}\n\n"
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

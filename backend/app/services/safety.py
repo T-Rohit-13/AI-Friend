@@ -5,9 +5,9 @@ from backend.app.schemas.chat import SafetyNotice
 
 # Regex trigger patterns
 CRISIS_PATTERNS = [
-    r"\b(kill myself|suicide|want to die|end my life|end it all|hurt myself|cutting myself|take my own life)\b",
+    r"\b(kill myself|killing myself|suicide|want to die|wanna die|end my life|ending my life|end it all|ending it all|hurt myself|hurting myself|cutting myself|take my own life|taking my own life)\b",
     r"\b(no reason to live|better off dead|commit suicide)\b",
-    r"\b(आत्महत्या|जान देना चाहता|مرنا چاہتا ہوں)\b",
+    r"\b(आत्महत्या|जान देना चाहता|مرना चाहता हूं)\b",
 ]
 
 MEDICAL_PATTERNS = [

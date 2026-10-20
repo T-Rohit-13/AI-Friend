@@ -35,7 +35,11 @@ class Settings(BaseSettings):
     # Supported providers: "mock", "groq", "openai", "anthropic", "gemini", "ollama"
     LLM_PROVIDER: str = "mock"
     LLM_API_KEY: Optional[str] = None
+    LLM_BASE_URL: Optional[str] = None
     LLM_MODEL: str = "llama3-70b-8192"
+    GROQ_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
+    MAX_HISTORY_TURNS: int = 10
 
     # Voice / Audio Pipeline
     ASR_PROVIDER: str = "web_speech"  # "whisper" or "web_speech"

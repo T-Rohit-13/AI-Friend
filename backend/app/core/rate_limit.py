@@ -1,8 +1,9 @@
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from backend.app.core.config import settings
 
 
 class InMemoryRateLimiter:
@@ -17,7 +18,8 @@ class InMemoryRateLimiter:
         # Map client_key -> list of timestamp floats
         self.clients: Dict[str, list[float]] = {}
 
-    def is_allowed(self, client_key: str, max_requests: int) -> Tuple[bool, int]:
+    def is_allowed(self, client_key: str, max_requests: Optional[int] = None) -> Tuple[bool, int]:
+        limit = max_requests if max_requests is not None else self.requests_per_minute
         now = time.time()
         cutoff = now - self.window_seconds
 
@@ -25,7 +27,7 @@ class InMemoryRateLimiter:
         timestamps = self.clients.get(client_key, [])
         valid_timestamps = [ts for ts in timestamps if ts > cutoff]
 
-        if len(valid_timestamps) >= max_requests:
+        if len(valid_timestamps) >= limit:
             retry_after = int(valid_timestamps[0] + self.window_seconds - now) + 1
             self.clients[client_key] = valid_timestamps
             return False, max(retry_after, 1)
@@ -33,6 +35,9 @@ class InMemoryRateLimiter:
         valid_timestamps.append(now)
         self.clients[client_key] = valid_timestamps
         return True, 0
+
+    def reset(self):
+        self.clients.clear()
 
 
 rate_limiter = InMemoryRateLimiter()
@@ -49,9 +54,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         # Stricter limit on auth routes, generous on regular routes
         if path.startswith("/api/v1/auth/login") or path.startswith("/api/v1/auth/register"):
-            max_limit = 20  # 20 per minute
+            max_limit = 200 if settings.DEBUG else 30
         else:
-            max_limit = 120 # 120 per minute
+            max_limit = 500 if settings.DEBUG else 120
 
         allowed, retry_after = rate_limiter.is_allowed(client_key, max_limit)
 
