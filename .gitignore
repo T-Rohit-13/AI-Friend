@@ -1,0 +1,85 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Build outputs
+frontend/dist/
+frontend/build/
+backend/dist/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# ML artifacts
+ml/voice_emotion/checkpoints/
+ml/voice_emotion/data/
+ml/voice_emotion/models/
+ml/voice_emotion/wandb/
+*.pt
+*.pth
+*.onnx
+*.h5
+!ml/voice_emotion/models/.gitkeep
+
+# Audio files (never commit user audio)
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.m4a
+*.webm
+
+# Test coverage
+coverage/
+htmlcov/
+.coverage
+.pytest_cache/
+.nyc_output/
+
+# Docker
+*.pid
+
+# Secrets
+*.pem
+*.key
+secrets/
+
+# Temporary
+tmp/
+temp/
+scratch/
