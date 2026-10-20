@@ -89,6 +89,27 @@
   --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
+/* High Contrast Mode (WCAG AAA) */
+[data-contrast='high'] {
+  --bg-canvas: #000000 !important;
+  --bg-surface: #0a0a0a !important;
+  --bg-surface-elevated: #171717 !important;
+  --bg-surface-card: #121212 !important;
+  --border-subtle: #ffffff !important;
+  --border-visible: #ffffff !important;
+  --text-primary: #ffffff !important;
+  --text-secondary: #e5e5e5 !important;
+  --text-muted: #d4d4d4 !important;
+  --current-emotion-color: #2dd4bf !important;
+  --current-emotion-glow: none !important;
+}
+
+[data-contrast='high'] button,
+[data-contrast='high'] input,
+[data-contrast='high'] select {
+  border: 2px solid #ffffff !important;
+}
+
 /* CSS Reset & Defaults */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -106,6 +127,44 @@ body {
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
   transition: background-color 400ms var(--ease-smooth);
+}
+
+/* Accessible Focus Indicator */
+:focus-visible {
+  outline: 3px solid var(--color-primary-400) !important;
+  outline-offset: 3px !important;
+  border-radius: 4px;
+}
+
+/* Screen Reader Skip to Content Link */
+.skip-to-content {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  background: var(--color-primary-500);
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  z-index: 9999;
+  text-decoration: none;
+  transition: top 200ms ease;
+}
+.skip-to-content:focus {
+  top: 16px;
+}
+
+/* Screen Reader Only Utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* Ambient Radial Glow Backdrop */
@@ -140,46 +199,33 @@ h1, h2, h3, h4, h5 {
   letter-spacing: -0.02em;
 }
 
-button, input, select, textarea {
-  font-family: inherit;
-}
-
-/* Glassmorphism Card Utility */
+/* Glassmorphism Containers */
 .glass-panel {
   background: var(--bg-surface);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border-subtle);
-  border-radius: 18px;
+  border-radius: 20px;
   box-shadow: var(--shadow-card);
 }
 
-.glass-panel-elevated {
-  background: var(--bg-surface-elevated);
+.glass-card {
+  background: var(--bg-surface-card);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--border-visible);
+  border: 1px solid var(--border-subtle);
   border-radius: 16px;
   box-shadow: var(--shadow-sm);
+  transition: all 250ms var(--ease-smooth);
 }
 
-/* Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.32);
+.glass-card:hover {
+  border-color: var(--border-visible);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
 }
 
-/* Common Interactive Buttons */
+/* Buttons & Interactive Elements */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -188,12 +234,13 @@ button, input, select, textarea {
   padding: 10px 20px;
   background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
   color: var(--text-on-primary);
-  font-weight: 600;
-  font-size: 0.925rem;
   border: none;
   border-radius: 12px;
+  font-family: var(--font-sans);
+  font-size: 0.925rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(20, 184, 166, 0.3);
+  box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
   transition: all 200ms var(--ease-smooth);
 }
 .btn-primary:hover:not(:disabled) {
@@ -259,4 +306,14 @@ button, input, select, textarea {
 @keyframes ripple {
   0% { transform: scale(0.8); opacity: 1; }
   100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Reduced Motion Preference (a11y) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -11,6 +11,8 @@ interface NavbarProps {
   onPersonaChange: (persona: string) => void;
   theme: 'dark' | 'light';
   onThemeToggle: () => void;
+  isHighContrast?: boolean;
+  onContrastToggle?: () => void;
   isMuted: boolean;
   onMuteToggle: () => void;
 }
@@ -24,6 +26,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onPersonaChange,
   theme,
   onThemeToggle,
+  isHighContrast = false,
+  onContrastToggle,
   isMuted,
   onMuteToggle,
 }) => {
@@ -216,6 +220,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           {theme === 'dark' ? '☀️' : '🌙'}
         </button>
+
+        {/* High Contrast Mode Toggle (a11y) */}
+        {onContrastToggle && (
+          <button
+            onClick={onContrastToggle}
+            className="btn-ghost"
+            style={{ padding: '6px 10px', fontSize: '0.85rem', fontWeight: 600 }}
+            title={isHighContrast ? 'Disable High Contrast (Alt+C)' : 'Enable WCAG AAA High Contrast (Alt+C)'}
+            aria-pressed={isHighContrast}
+          >
+            {isHighContrast ? '👁️ Standard' : '👁️ Contrast'}
+          </button>
+        )}
       </div>
     </header>
   );

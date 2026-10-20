@@ -18,6 +18,7 @@ export function App() {
   const [language, setLanguage] = useState('en');
   const [persona, setPersona] = useState('friendly_companion');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [isHighContrast, setIsHighContrast] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,10 +26,51 @@ export function App() {
 
   const isSpeakingRef = useRef(false);
 
-  // Initialize theme & session
+  // Initialize theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  // High contrast mode attribute
+  useEffect(() => {
+    if (isHighContrast) {
+      document.documentElement.setAttribute('data-contrast', 'high');
+    } else {
+      document.documentElement.removeAttribute('data-contrast');
+    }
+  }, [isHighContrast]);
+
+  // Global Keyboard Navigation Shortcuts (a11y)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey) {
+        if (e.key === '1') {
+          e.preventDefault();
+          setCurrentMode('chat');
+        } else if (e.key === '2') {
+          e.preventDefault();
+          setCurrentMode('voice');
+        } else if (e.key === '3') {
+          e.preventDefault();
+          setCurrentMode('games');
+        } else if (e.key === '4') {
+          e.preventDefault();
+          setCurrentMode('study');
+        } else if (e.key === '5') {
+          e.preventDefault();
+          setCurrentMode('memories');
+        } else if (e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          setIsHighContrast((prev) => !prev);
+        } else if (e.key.toLowerCase() === 'm') {
+          e.preventDefault();
+          setIsMuted((prev) => !prev);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Update dynamic ambient emotion variables
   useEffect(() => {
@@ -98,46 +140,49 @@ export function App() {
 
   // Handle User Message
   const handleSendMessage = async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    // Barge-in: stop any active assistant speech
     stopSpeaking();
 
-    const userMsg: ChatMessage = {
-      id: `usr-${Date.now()}`,
+    // Optimistic user message insertion
+    const tempUserMsg: ChatMessage = {
+      id: `user-${Date.now()}`,
       role: 'user',
       content: text,
       created_at: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, tempUserMsg]);
     setIsLoading(true);
     setCompanionState('thinking');
 
     try {
-      const res = await api.sendMessage(sessionId, text, language, companionEmotion);
+      const turn = await api.sendMessage(sessionId, text, language, 'neutral');
 
-      const assistantMsg: ChatMessage = {
-        id: res.message_id || `asst-${Date.now()}`,
+      const companionReply: ChatMessage = {
+        id: turn.message_id,
         role: 'assistant',
-        content: res.content,
-        companion_emotion: res.companion_emotion,
-        safety_notice: res.safety_notice,
+        content: turn.content,
+        companion_emotion: turn.companion_emotion,
+        safety_notice: turn.safety_notice,
         created_at: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages((prev) => [...prev, companionReply]);
 
-      // Adapt ambient emotion
-      if (res.companion_emotion) {
-        setCompanionEmotion(res.companion_emotion);
+      if (turn.companion_emotion) {
+        setCompanionEmotion(turn.companion_emotion);
       }
 
-      // Voice readout if in Voice Mode or unmuted
-      if (currentMode === 'voice' || !isMuted) {
-        speakText(res.content);
+      // Speak reply if not in crisis
+      if (!turn.safety_notice?.is_crisis) {
+        speakText(turn.content);
       } else {
         setCompanionState('idle');
       }
     } catch (err) {
-      console.error('Failed to get companion reply:', err);
+      console.error('Failed to send message:', err);
       setCompanionState('idle');
     } finally {
       setIsLoading(false);
@@ -145,16 +190,13 @@ export function App() {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '100vh',
-        position: 'relative',
-        zIndex: 1,
-      }}
-    >
-      {/* Top Navbar */}
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* a11y Skip Link */}
+      <a href="#main-content" className="skip-to-content">
+        Skip to main content (or press Alt+1 for Chat)
+      </a>
+
+      {/* Primary Navigation Bar */}
       <Navbar
         currentMode={currentMode}
         onSelectMode={setCurrentMode}
@@ -164,6 +206,8 @@ export function App() {
         onPersonaChange={setPersona}
         theme={theme}
         onThemeToggle={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        isHighContrast={isHighContrast}
+        onContrastToggle={() => setIsHighContrast(!isHighContrast)}
         isMuted={isMuted}
         onMuteToggle={() => {
           if (!isMuted) stopSpeaking();
@@ -180,6 +224,8 @@ export function App() {
           justifyContent: 'center',
           padding: '10px 16px 20px',
         }}
+        role="region"
+        aria-label="Companion Avatar Status"
       >
         <EmotionalAvatar
           emotion={companionEmotion}
@@ -190,6 +236,9 @@ export function App() {
 
       {/* Main Content View Container */}
       <main
+        id="main-content"
+        role="main"
+        tabIndex={-1}
         style={{
           flex: 1,
           display: 'flex',
@@ -260,9 +309,10 @@ export function App() {
           borderTop: '1px solid var(--border-subtle)',
           background: 'rgba(0, 0, 0, 0.2)',
         }}
+        role="contentinfo"
       >
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-          🛡️ <strong>AI Friend Transparency Notice:</strong> AI Friend is an artificial intelligence companion designed for supportive conversation and learning. It does not replace clinical therapy or medical diagnosis. If you or someone you know is in crisis, please call or text <strong>988</strong> (US/Canada), <strong>112</strong> (EU), or <strong>9152987821</strong> (India Tele-MANAS).
+          🛡️ <strong>AI Friend Transparency Notice:</strong> AI Friend is an artificial intelligence companion designed for supportive conversation and learning. It does not replace clinical therapy or medical diagnosis. If you or someone you know is in crisis, please call or text <strong>988</strong> (US/Canada), <strong>112</strong> (EU), or <strong>9152987821</strong> (India Tele-MANAS). Hotkeys: Alt+1 (Chat), Alt+2 (Voice), Alt+3 (Games), Alt+4 (Study), Alt+5 (Vault), Alt+C (High Contrast), Alt+M (Mute).
         </div>
       </footer>
     </div>
