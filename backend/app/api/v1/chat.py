@@ -206,7 +206,29 @@ async def send_message(
     mem_res = await db.execute(mem_query)
     memories = [m.fact for m in mem_res.scalars().all()]
 
-    # 3. Save User Message
+    # 3. Detect Language Switch Intent or Tamil characters
+    content_lower = payload.content.lower().strip()
+    is_tamil_chars = any(0x0B80 <= ord(c) <= 0x0BFF for c in payload.content)
+    is_tamil_request = any(phrase in content_lower for phrase in [
+        "talk in tamil", "speak in tamil", "tamil please", "switch to tamil", 
+        "can we speak in tamil", "can we talk in tamil", "let's talk in tamil",
+        "lets talk in tamil", "in tamil", "tamil-ல்", "தமிழில்"
+    ])
+    is_english_request = any(phrase in content_lower for phrase in [
+        "talk in english", "speak in english", "switch to english", 
+        "can we speak in english", "let's talk in english", "lets talk in english", "in english"
+    ])
+
+    if is_tamil_chars or is_tamil_request:
+        session.language = "ta-IN"
+        db.add(session)
+        await db.flush()
+    elif is_english_request:
+        session.language = "en-US"
+        db.add(session)
+        await db.flush()
+
+    # 4. Save User Message
     user_msg = Message(
         session_id=session.id,
         role="user",
@@ -216,7 +238,7 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # 4. Context Engine Turn Processing & Mood Analysis
+    # 5. Context Engine Turn Processing & Mood Analysis
     from backend.app.services.context_engine import ContextEngine
     from backend.app.services.mood_analysis import MoodAnalysisService
 
@@ -247,19 +269,32 @@ async def send_message(
     user_detected_emotion = turn_result.get("detected_emotion", text_emotion)
     safety_notice = turn_result["safety_notice"]
 
+    # If the reply contains Tamil script, ensure language is recognized as ta-IN
+    reply_is_tamil = any(0x0B80 <= ord(c) <= 0x0BFF for c in reply_content) or session.language.startswith("ta")
+    effective_lang = "ta-IN" if reply_is_tamil else session.language
+    if reply_is_tamil and not session.language.startswith("ta"):
+        session.language = "ta-IN"
+        db.add(session)
+        await db.flush()
+
     logger.info(
         f"Chat turn completed: session_id={session.id} provider={active_provider} "
-        f"reply_len={len(reply_content)} companion_emotion={companion_emotion}"
+        f"reply_len={len(reply_content)} lang={effective_lang} companion_emotion={companion_emotion}"
     )
 
     # Update user message detected emotion
     user_msg.detected_emotion = user_detected_emotion
 
-    # 7. Save Assistant Message
+    # 6. Save Assistant Message
+    import urllib.parse
+    encoded_reply = urllib.parse.quote(reply_content)
+    audio_url = f"/api/v1/voice/tts?text={encoded_reply}&language={effective_lang}"
+
     assistant_msg = Message(
         session_id=session.id,
         role="assistant",
         content=reply_content,
+        audio_url=audio_url,
         companion_emotion=companion_emotion,
     )
     db.add(assistant_msg)
@@ -270,7 +305,8 @@ async def send_message(
         message_id=assistant_msg.id,
         role="assistant",
         content=reply_content,
-        language=session.language,
+        language=effective_lang,
+        audio_url=audio_url,
         companion_emotion=companion_emotion,
         user_emotion=user_detected_emotion,
         safety_notice=safety_notice,
@@ -291,8 +327,27 @@ async def stream_chat_turn(
     )
     sess_res = await db.execute(sess_query)
     session = sess_res.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    # Detect Language Switch Intent or Tamil characters
+    content_lower = payload.content.lower().strip()
+    is_tamil_chars = any(0x0B80 <= ord(c) <= 0x0BFF for c in payload.content)
+    is_tamil_request = any(phrase in content_lower for phrase in [
+        "talk in tamil", "speak in tamil", "tamil please", "switch to tamil", 
+        "can we speak in tamil", "can we talk in tamil", "let's talk in tamil",
+        "lets talk in tamil", "in tamil", "tamil-ல்", "தமிழில்"
+    ])
+    is_english_request = any(phrase in content_lower for phrase in [
+        "talk in english", "speak in english", "switch to english", 
+        "can we speak in english", "let's talk in english", "lets talk in english", "in english"
+    ])
+
+    if is_tamil_chars or is_tamil_request:
+        session.language = "ta-IN"
+        db.add(session)
+        await db.flush()
+    elif is_english_request:
+        session.language = "en-US"
+        db.add(session)
+        await db.flush()
 
     # Safety check first
     is_flagged, direct_reply, safety_notice = evaluate_safety(

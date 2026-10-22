@@ -2,20 +2,25 @@
 Multilingual Automatic Speech Recognition (ASR) Engine.
 Supports:
 1. Audio validation: MIME type check, magic bytes inspection, size limits (100B - 25MB).
-2. Remote Whisper ASR (Groq / OpenAI audio/transcriptions endpoint).
-3. Local Whisper model integration when runtime environment supports it.
-4. Resilient multi-lingual fallback & synthetic acoustic decoding for testing.
+2. Remote Whisper ASR (OpenAI / Groq audio/transcriptions endpoint).
+3. Genuine Speech Recognition for Tamil (ta-IN) and English (en-IN/en-US) via Google Speech ASR.
+4. Zero mocked or hardcoded transcripts.
 """
 
 import io
 import os
+import struct
+import wave
 import logging
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Tuple
 import httpx
+import torch
 from fastapi import HTTPException, status
 
 from backend.app.core.config import settings
+from backend.app.ml.preprocessing import decode_wav_to_tensor
 
 logger = logging.getLogger(__name__)
 
@@ -33,37 +38,6 @@ AUDIO_SIGNATURES = {
 
 SUPPORTED_LANGUAGES = ["en", "hi", "ta", "es", "fr", "de", "ja"]
 
-# Sample transcription test set for evaluation & offline acoustic fallback
-MOCK_TRANSCRIPTION_CORPUS = {
-    "en": [
-        "Hello, I was feeling a bit overwhelmed today and wanted to talk.",
-        "Can you share an interesting riddle to help me unwind?",
-        "I just accomplished a major goal and wanted to celebrate!",
-    ],
-    "hi": [
-        "नमस्ते, आज का दिन काफी व्यस्त रहा।",
-        "मुझे थोड़ी चिंता हो रही है, क्या हम बात कर सकते हैं?",
-        "क्या आप मुझे एक मजेदार चुटकुला सुना सकते हैं?",
-    ],
-    "ta": [
-        "வணக்கம், இன்று எனக்கு மிகவும் மகிழ்ச்சியான நாள்.",
-        "மன அமைதிக்காக ஒரு சிறிய உதவி தேவைப்படுகிறது.",
-    ],
-    "es": [
-        "Hola, me siento un poco cansado después del trabajo de hoy.",
-        "¿Me puedes contar una adivinanza divertida?",
-    ],
-    "fr": [
-        "Bonjour, j'aimerais échanger un moment pour décompresser.",
-    ],
-    "de": [
-        "Hallo, ich hatte einen anstrengenden Tag und brauche etwas Ruhe.",
-    ],
-    "ja": [
-        "こんにちは、今日はずっと忙しかったので少し話したいです。",
-    ],
-}
-
 
 class AudioValidationError(HTTPException):
     def __init__(self, detail: str, status_code: int = status.HTTP_400_BAD_REQUEST):
@@ -79,7 +53,7 @@ def validate_audio_bytes(data: bytes, content_type: Optional[str] = None) -> Tup
     """
     size = len(data)
     if size < 100:
-        raise AudioValidationError("Audio file too small or empty (< 100 bytes). Please record for at least 0.5s.")
+        raise AudioValidationError("Audio file too small or empty (< 100 bytes). Please speak into the microphone for at least 0.5s.")
 
     max_size = 25 * 1024 * 1024  # 25 MB
     if size > max_size:
@@ -120,14 +94,110 @@ class BaseASRProvider(ABC):
         pass
 
 
-class RemoteWhisperASRProvider(BaseASRProvider):
-    """Transcribes audio using OpenAI / Groq Whisper endpoint."""
+class GoogleSpeechASRProvider(BaseASRProvider):
+    """
+    Genuine speech recognition engine using Google Speech Recognition API via speech_recognition.
+    Supports authentic Tamil (ta-IN) and English (en-IN / en-US).
+    Never fabricates, mocks, or hardcodes text.
+    """
 
-    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", model: str = "whisper-1", fallback: Optional[BaseASRProvider] = None):
+    def __init__(self):
+        try:
+            import speech_recognition as sr
+            self.sr = sr
+            self.recognizer = sr.Recognizer()
+        except ImportError:
+            self.sr = None
+            self.recognizer = None
+
+    async def transcribe(
+        self,
+        audio_bytes: bytes,
+        language: Optional[str] = "en",
+        filename: str = "audio.wav",
+    ) -> Dict[str, Any]:
+        validate_audio_bytes(audio_bytes)
+
+        if not self.sr:
+            raise AudioValidationError("Speech recognition engine not initialized on backend.")
+
+        # Map language codes to genuine BCP-47 locales
+        lang_lower = (language or "en").lower().strip()
+        if lang_lower in ("ta", "ta-in", "tamil") or lang_lower.startswith("ta"):
+            target_lang = "ta-IN"
+        elif lang_lower in ("hi", "hi-in", "hindi") or lang_lower.startswith("hi"):
+            target_lang = "hi-IN"
+        elif lang_lower in ("en-in", "english-india"):
+            target_lang = "en-IN"
+        elif lang_lower in ("es", "es-es", "spanish"):
+            target_lang = "es-ES"
+        elif lang_lower in ("fr", "fr-fr", "french"):
+            target_lang = "fr-FR"
+        elif lang_lower in ("de", "de-de", "german"):
+            target_lang = "de-DE"
+        elif lang_lower in ("ja", "ja-jp", "japanese"):
+            target_lang = "ja-JP"
+        else:
+            target_lang = "en-US"
+
+        # Prepare WAV audio buffer
+        wav_stream = None
+        if audio_bytes.startswith(b"RIFF"):
+            wav_stream = io.BytesIO(audio_bytes)
+        else:
+            # Decode audio tensor and repack as clean 16kHz 16-bit mono WAV
+            tensor = decode_wav_to_tensor(audio_bytes)
+            if torch.max(torch.abs(tensor)).item() < 0.005:
+                raise AudioValidationError("Audio recording is silent. Please speak clearly into your microphone.")
+
+            samples = (tensor.clamp(-1.0, 1.0) * 32767.0).to(torch.int16).tolist()
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+            buf.seek(0)
+            wav_stream = buf
+
+        loop = asyncio.get_running_loop()
+
+        def _recognize_sync():
+            with self.sr.AudioFile(wav_stream) as source:
+                audio_data = self.recognizer.record(source)
+            return self.recognizer.recognize_google(audio_data, language=target_lang)
+
+        try:
+            recognized_text = await loop.run_in_executor(None, _recognize_sync)
+            return {
+                "text": recognized_text.strip(),
+                "language": target_lang,
+                "duration_seconds": round(len(audio_bytes) / 32000.0, 2),
+                "provider": "google_speech_asr",
+            }
+        except self.sr.UnknownValueError:
+            raise AudioValidationError(
+                "Could not understand audio. Please speak clearly into the microphone."
+            )
+        except self.sr.RequestError as e:
+            logger.error(f"Speech recognition service error: {e}")
+            raise AudioValidationError("Speech recognition network error. Please try again.")
+
+
+class RemoteWhisperASRProvider(BaseASRProvider):
+    """Transcribes audio using OpenAI / Groq Whisper endpoint with resilient fallback."""
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.openai.com/v1",
+        model: str = "whisper-1",
+        fallback: Optional[BaseASRProvider] = None,
+    ):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.fallback = fallback or ResilientLocalASRProvider()
+        self.fallback = fallback or GoogleSpeechASRProvider()
 
     async def transcribe(
         self,
@@ -141,63 +211,39 @@ class RemoteWhisperASRProvider(BaseASRProvider):
         files = {"file": (filename, audio_bytes, "audio/wav")}
         data: Dict[str, Any] = {"model": self.model}
         if language:
-            data["language"] = language
+            lang_code = language.split("-")[0]
+            data["language"] = lang_code
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(url, headers=headers, files=files, data=data)
                 resp.raise_for_status()
                 result = resp.json()
+                text = result.get("text", "").strip()
+                if not text:
+                    raise AudioValidationError("Could not understand audio. Please speak clearly.")
                 return {
-                    "text": result.get("text", "").strip(),
+                    "text": text,
                     "language": language or "en",
                     "duration_seconds": result.get("duration", 2.0),
                     "provider": "remote_whisper",
                 }
         except Exception as e:
-            logger.warning(f"Remote Whisper API failed ({e}), using resilient local acoustic decoder fallback.")
+            logger.warning(f"Remote Whisper API notice ({e}), routing to Google Speech ASR...")
             return await self.fallback.transcribe(audio_bytes, language, filename)
 
 
-class ResilientLocalASRProvider(BaseASRProvider):
-    """
-    Self-contained local acoustic decoder & linguistic evaluator.
-    Accurately estimates duration from audio byte stream and returns contextual transcriptions.
-    """
-
-    async def transcribe(
-        self,
-        audio_bytes: bytes,
-        language: Optional[str] = "en",
-        filename: str = "audio.wav",
-    ) -> Dict[str, Any]:
-        # Validate format
-        _, detected_format = validate_audio_bytes(audio_bytes)
-
-        # Estimate duration: ~16kHz mono 16-bit PCM = 32000 bytes/sec
-        bytes_len = len(audio_bytes)
-        estimated_seconds = max(0.8, round(bytes_len / 32000.0, 2))
-
-        lang_key = language if language in MOCK_TRANSCRIPTION_CORPUS else "en"
-        samples = MOCK_TRANSCRIPTION_CORPUS.get(lang_key, MOCK_TRANSCRIPTION_CORPUS["en"])
-        selected_text = samples[0]
-
-        return {
-            "text": selected_text,
-            "language": lang_key,
-            "duration_seconds": estimated_seconds,
-            "detected_format": detected_format,
-            "provider": "resilient_local_asr",
-        }
-
-
 def get_asr_provider() -> BaseASRProvider:
-    """Factory creating the appropriate ASR provider."""
-    # Check for Groq or OpenAI API key
-    api_key = settings.OPENAI_API_KEY or settings.GROQ_API_KEY or settings.LLM_API_KEY
+    """Factory creating the active ASR provider."""
+    api_key = settings.OPENAI_API_KEY or settings.GROQ_API_KEY
     if api_key:
         base_url = "https://api.groq.com/openai/v1" if settings.GROQ_API_KEY else "https://api.openai.com/v1"
         model = "whisper-large-v3" if settings.GROQ_API_KEY else "whisper-1"
-        return RemoteWhisperASRProvider(api_key=api_key, base_url=base_url, model=model)
+        return RemoteWhisperASRProvider(
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            fallback=GoogleSpeechASRProvider(),
+        )
 
-    return ResilientLocalASRProvider()
+    return GoogleSpeechASRProvider()

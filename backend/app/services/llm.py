@@ -102,7 +102,36 @@ class MockLLMClient(BaseLLMProvider):
                 break
 
         lower = last_user_message.lower().strip()
-        is_tamil = language == "ta" or any(ord(c) >= 0x0B80 and ord(c) <= 0x0BFF for c in last_user_message)
+        is_tamil_request = any(phrase in lower for phrase in [
+            "talk in tamil", "speak in tamil", "tamil please", "switch to tamil", 
+            "can we speak in tamil", "can we talk in tamil", "let's talk in tamil",
+            "lets talk in tamil", "in tamil", "tamil-ல்", "தமிழில்"
+        ])
+        is_english_request = any(phrase in lower for phrase in [
+            "talk in english", "speak in english", "switch to english", 
+            "can we speak in english", "let's talk in english", "lets talk in english", "in english"
+        ])
+
+        lang_lower = (language or "en").lower().strip()
+        is_tamil = (
+            lang_lower == "ta"
+            or lang_lower.startswith("ta")
+            or "tamil" in lang_lower
+            or is_tamil_request
+            or any(0x0B80 <= ord(c) <= 0x0BFF for c in last_user_message)
+        )
+
+        # 0. Explicit Language Switch Handlers
+        if is_tamil_request:
+            return (
+                "நிச்சயமாக! நாம் இனி தமிழில் பேசலாம். வணக்கம்! உங்களுக்கு இன்று என்ன உதவி வேண்டும்? "
+                "உங்கள் மனதில் உள்ளதை என்னிடம் மகிழ்ச்சியாகப் பகிருங்கள்."
+            )
+        if is_english_request:
+            return (
+                "Of course! We can definitely switch back to English. How are you feeling right now? "
+                "I'm right here with you."
+            )
 
         # 1. Greetings
         if any(w in lower for w in ["hi", "hello", "hey", "hola", "namaste", "vanakkam", "வணக்கம்", "नमस्ते"]):

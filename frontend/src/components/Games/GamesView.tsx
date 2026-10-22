@@ -12,7 +12,7 @@ export const GamesView: React.FC<GamesViewProps> = ({
   userMood = 'neutral',
 }) => {
   const [activeTab, setActiveTab] = useState<'rps' | 'carrom' | 'chess' | 'riddles'>('rps');
-  const isTamil = language === 'ta';
+  const isTamil = language === 'ta' || language.startsWith('ta');
 
   // -------------------------------------------------------------
   // GAME 1: Stone Paper Scissors (Rock Paper Scissors)

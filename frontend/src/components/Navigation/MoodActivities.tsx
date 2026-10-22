@@ -31,7 +31,7 @@ export const MoodActivities: React.FC<MoodActivitiesProps> = ({
   const engine = getThemeEngine();
   const [state, setState] = useState<ThemeEngineState>(engine.getState());
   const [dismissed, setDismissed] = useState(false);
-  const isTamil = language === 'ta';
+  const isTamil = language === 'ta' || language.startsWith('ta');
 
   useEffect(() => {
     const unsub = engine.subscribe((s) => {

@@ -19,8 +19,14 @@ async def setup_database():
 
 
 def generate_dummy_wav(size: int = 1000) -> bytes:
-    header = b"RIFF" + (size - 8).to_bytes(4, "little") + b"WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data"
-    data = b"\x00" * (size - len(header))
+    data_size = max(0, size - 44)
+    header = (
+        b"RIFF"
+        + (data_size + 36).to_bytes(4, "little")
+        + b"WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data"
+        + data_size.to_bytes(4, "little")
+    )
+    data = b"\x00" * data_size
     return header + data
 
 

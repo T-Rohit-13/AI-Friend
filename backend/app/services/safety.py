@@ -39,7 +39,15 @@ def evaluate_safety(text: str, user_language: str = "en") -> Tuple[bool, Optiona
                 ]
             )
 
-            if user_language == "es":
+            if (user_language or "").startswith("ta"):
+                message = (
+                    "நீங்கள் இந்த அளவுக்கு வேதனையை அனுபவிக்கிறீர்கள் என்பதை அறிந்து நான் மிகவும் வருந்துகிறேன். "
+                    "உங்கள் வாழ்க்கை மிக மிக மதிப்புமிக்கது. நான் ஒரு AI தோழன் மட்டுமே என்பதால் மருத்துவ அவசர உதவி அளிக்க இயலாது. "
+                    "தயவுசெய்து உடனடியாக இலவச மற்றும் ரகசிய உதவி எண்களைத் தொடர்பு கொள்ளுங்கள்: "
+                    "இந்தியாவில் 9152987821 (Tele-MANAS) அல்லது 112 / 108 என்ற எண்ணை அழைக்கவும், அல்லது findahelpline.com தளத்தைப் பார்க்கவும். "
+                    "உங்களுக்கு உதவ பலர் எப்போதும் தயாராக இருக்கிறார்கள்."
+                )
+            elif user_language == "es":
                 message = (
                     "Siento mucho que estés pasando por este dolor, pero tu vida es muy valiosa. "
                     "Como compañera de IA no puedo darte la ayuda médica que necesitas en este momento. "

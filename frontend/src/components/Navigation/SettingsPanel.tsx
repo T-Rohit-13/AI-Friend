@@ -34,7 +34,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const engine = getThemeEngine();
   const [state, setState] = useState<ThemeEngineState>(engine.getState());
   const panelRef = useRef<HTMLDivElement>(null);
-  const isTamil = language === 'ta';
+  const isTamil = language === 'ta' || language.startsWith('ta');
 
   useEffect(() => {
     const unsub = engine.subscribe(setState);

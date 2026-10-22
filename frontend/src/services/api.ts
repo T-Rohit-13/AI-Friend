@@ -269,6 +269,10 @@ export const api = {
     return `${API_BASE_URL}/api/v1/voice/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
   },
 
+  getBaseUrl(): string {
+    return API_BASE_URL;
+  },
+
   // -------------------------------------------------------------
   // Chat & Conversation
   // -------------------------------------------------------------

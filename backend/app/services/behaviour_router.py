@@ -61,8 +61,11 @@ EMOTION_INSTRUCTIONS = {
 
 LANGUAGE_NAMES = {
     "en": "English",
+    "en-US": "English",
     "ta": "Tamil (தமிழ்)",
+    "ta-IN": "Tamil (தமிழ்)",
     "hi": "Hindi (हिन्दी)",
+    "hi-IN": "Hindi (हिन्दी)",
     "es": "Spanish",
     "fr": "French",
     "de": "German",
@@ -86,14 +89,15 @@ class BehaviourRouter:
         persona_text = PERSONA_PROMPTS.get(persona, PERSONA_PROMPTS["friendly_companion"])
 
         # 2. Language constraint
-        if language == "ta":
+        lang_str = (language or "en").lower().strip()
+        if lang_str == "ta" or lang_str.startswith("ta") or "tamil" in lang_str:
             lang_text = (
                 "You MUST converse in authentic, natural Tamil (தமிழ்) using proper Tamil script. "
                 "Never substitute Tamil with English or Romanized Tanglish unless the user explicitly asks for English. "
                 "Respond naturally, warmly, intelligently, and idiomatically like a caring, close Tamil friend. "
                 "Understand the user's Tamil phrases, emotions, studies, jokes, and questions, and reply directly in Tamil."
             )
-        elif language == "hi":
+        elif lang_str == "hi" or lang_str.startswith("hi") or "hindi" in lang_str:
             lang_text = (
                 "You MUST converse in natural Hindi (हिन्दी) using Devanagari script. "
                 "Speak conversationally, warmly, and respectfully."

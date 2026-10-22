@@ -42,19 +42,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   userMood = 'neutral',
   onOpenSettings,
 }) => {
+  // UI chrome is strictly English per design requirements
+  const t = translations.en;
   const isTamil = language === 'ta';
-  const t = translations[isTamil ? 'ta' : 'en'];
 
   const languages = [
-    { code: 'en', name: 'English' },
-    { code: 'ta', name: 'தமிழ் (Tamil)' },
+    { code: 'en', name: 'AI Voice: English' },
+    { code: 'ta', name: 'AI Voice: தமிழ் (Tamil)' },
   ];
 
   const personas = [
-    { id: 'friendly_companion', name: isTamil ? 'அன்பான தோழன் ☀️' : 'Friendly Pal ☀️' },
-    { id: 'calm_confidant', name: isTamil ? 'அமைதியான ஆலோசகர் 🌊' : 'Calm Confidant 🌊' },
-    { id: 'study_coach', name: isTamil ? 'படிப்பு வழிகாட்டி 📚' : 'Study Coach 📚' },
-    { id: 'playful_gamer', name: isTamil ? 'விளையாட்டு தோழன் 🎮' : 'Playful Gamer 🎮' },
+    { id: 'friendly_companion', name: 'Friendly Pal ☀️' },
+    { id: 'calm_confidant', name: 'Calm Confidant 🌊' },
+    { id: 'study_coach', name: 'Study Coach 📚' },
+    { id: 'playful_gamer', name: 'Playful Gamer 🎮' },
   ];
 
   const modes: { id: AppMode; label: string; icon: string }[] = [
@@ -64,6 +65,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'study', label: t.tabStudy, icon: '📚' },
     { id: 'memories', label: t.tabMemories, icon: '🧠' },
   ];
+
 
   return (
     <header
@@ -200,8 +202,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             outline: 'none',
             boxShadow: 'var(--shadow-sm)',
           }}
-          title={isTamil ? 'தோழரின் ஆளுமை' : 'Companion Persona'}
-          aria-label={isTamil ? 'தோழரின் ஆளுமை' : 'Companion Persona'}
+          title="Companion Persona"
+          aria-label="Companion Persona"
         >
           {personas.map((p) => (
             <option key={p.id} value={p.id}>
@@ -210,7 +212,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           ))}
         </select>
 
-        {/* Language Select */}
+        {/* AI Conversation Language Select */}
         <select
           value={language}
           onChange={(e) => onLanguageChange(e.target.value)}
@@ -226,8 +228,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             outline: 'none',
             boxShadow: 'var(--shadow-sm)',
           }}
-          title={isTamil ? 'மொழியை மாற்றவும்' : 'Select Language'}
-          aria-label={isTamil ? 'மொழியை மாற்றவும்' : 'Select Language'}
+          title="AI Conversation Language"
+          aria-label="AI Conversation Language"
         >
           {languages.map((l) => (
             <option key={l.code} value={l.code}>
@@ -235,6 +237,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </option>
           ))}
         </select>
+
 
         {/* Audio Mute Button */}
         <button

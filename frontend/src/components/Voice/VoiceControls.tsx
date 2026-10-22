@@ -29,7 +29,7 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const isTamil = language === 'ta';
+  const isTamil = language === 'ta' || language.startsWith('ta');
 
   // Normalize language for SpeechRecognition
   const recognitionLang = isTamil ? 'ta-IN' : 'en-US';

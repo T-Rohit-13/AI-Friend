@@ -29,6 +29,8 @@ export function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
   const [currentlySpeakingMsgId, setCurrentlySpeakingMsgId] = useState<string | null>(null);
+  const [audioLoadingMsgId, setAudioLoadingMsgId] = useState<string | null>(null);
+  const [ttsNotice, setTtsNotice] = useState<string | null>(null);
   const [verificationBanner, setVerificationBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Auth State
@@ -166,20 +168,28 @@ export function App() {
   };
 
   // Speech Synthesis with genuine Tamil & English voice support
-  const speakText = (text: string, msgId?: string) => {
+  const speakText = (
+    text: string,
+    msgId?: string,
+    overrideLang?: string,
+    directAudioUrl?: string | null
+  ) => {
     if (isMuted) return;
     stopSpeaking();
-    setCurrentlySpeakingMsgId(msgId || null);
+    if (msgId) setCurrentlySpeakingMsgId(msgId);
 
-    // If Tamil, check if browser has native Tamil voice; if not, use high-fidelity neural edge-tts
-    if (language === 'ta') {
+    const hasTamilUnicode = /[\u0B80-\u0BFF]/.test(text);
+    const resolvedLang = overrideLang || (hasTamilUnicode ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'));
+    const isTamilSpeech = resolvedLang.startsWith('ta') || hasTamilUnicode;
+
+    if (isTamilSpeech) {
+      // 1. Check if browser has a genuine native Tamil voice in Web Speech
       const voices = 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : [];
       const tamilVoice = voices.find(
         (v) =>
-          v.lang === 'ta-IN' ||
-          v.lang.startsWith('ta') ||
-          v.name.toLowerCase().includes('tamil') ||
-          v.name.toLowerCase().includes('valluvar')
+          (v.lang && (v.lang.toLowerCase() === 'ta-in' || v.lang.toLowerCase().startsWith('ta-') || v.lang.toLowerCase() === 'ta')) ||
+          (v.name && v.name.toLowerCase().includes('tamil')) ||
+          (v.name && (v.name.toLowerCase().includes('pallavi') || v.name.toLowerCase().includes('valluvar')))
       );
 
       if (tamilVoice && 'speechSynthesis' in window) {
@@ -192,51 +202,25 @@ export function App() {
         utterance.onstart = () => {
           isSpeakingRef.current = true;
           setCompanionState('speaking');
+          setAudioLoadingMsgId(null);
         };
         utterance.onend = () => {
           isSpeakingRef.current = false;
           setCurrentlySpeakingMsgId(null);
+          setAudioLoadingMsgId(null);
           setCompanionState('idle');
         };
-        utterance.onerror = () => {
-          isSpeakingRef.current = false;
-          setCurrentlySpeakingMsgId(null);
-          setCompanionState('idle');
+        utterance.onerror = (e) => {
+          console.warn('Native Tamil voice error, falling back to neural backend TTS:', e);
+          fallbackToBackendTamilAudio(text, msgId, directAudioUrl);
         };
         window.speechSynthesis.speak(utterance);
         return;
       }
 
-      // If browser lacks a native Tamil voice, stream neural Tamil audio from backend edge-tts
-      try {
-        const audioUrl = api.getTtsAudioUrl(text, 'ta');
-        const audio = new Audio(audioUrl);
-        audioPlayerRef.current = audio;
-
-        audio.onplay = () => {
-          isSpeakingRef.current = true;
-          setCompanionState('speaking');
-        };
-        audio.onended = () => {
-          isSpeakingRef.current = false;
-          setCurrentlySpeakingMsgId(null);
-          setCompanionState('idle');
-        };
-        audio.onerror = (e) => {
-          console.warn('Backend Tamil TTS playback notice:', e);
-          isSpeakingRef.current = false;
-          setCurrentlySpeakingMsgId(null);
-          setCompanionState('idle');
-        };
-        audio.play().catch((err) => {
-          console.warn('Audio play auto-policy warning:', err);
-          setCompanionState('idle');
-          setCurrentlySpeakingMsgId(null);
-        });
-        return;
-      } catch (err) {
-        console.warn('Tamil TTS synthesis error:', err);
-      }
+      // 2. If browser lacks a native Tamil voice (the common case), stream neural Tamil audio from backend edge-tts/gtts
+      fallbackToBackendTamilAudio(text, msgId, directAudioUrl);
+      return;
     }
 
     // Default Web Speech for English
@@ -248,29 +232,83 @@ export function App() {
 
       const voices = window.speechSynthesis.getVoices();
       const matchedVoice =
-        voices.find((v) => v.lang.startsWith('en')) ||
-        voices.find((v) => v.lang.includes('en') || v.name.includes('Jenny') || v.name.includes('David'));
+        voices.find((v) => (v.name.includes('Natural') || v.name.includes('Online')) && v.lang.startsWith('en')) ||
+        voices.find((v) => v.lang === 'en-US' || v.lang.startsWith('en')) ||
+        null;
 
       if (matchedVoice) utterance.voice = matchedVoice;
 
       utterance.onstart = () => {
         isSpeakingRef.current = true;
         setCompanionState('speaking');
+        setAudioLoadingMsgId(null);
       };
 
       utterance.onend = () => {
         isSpeakingRef.current = false;
         setCurrentlySpeakingMsgId(null);
+        setAudioLoadingMsgId(null);
         setCompanionState('idle');
       };
 
       utterance.onerror = () => {
         isSpeakingRef.current = false;
         setCurrentlySpeakingMsgId(null);
+        setAudioLoadingMsgId(null);
         setCompanionState('idle');
       };
 
       window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const fallbackToBackendTamilAudio = (text: string, msgId?: string, directAudioUrl?: string | null) => {
+    try {
+      if (msgId) setAudioLoadingMsgId(msgId);
+      setCompanionState('speaking');
+
+      const streamUrl = directAudioUrl
+        ? (directAudioUrl.startsWith('http') ? directAudioUrl : `${api.getBaseUrl()}${directAudioUrl}`)
+        : api.getTtsAudioUrl(text, 'ta-IN');
+
+      const audio = new Audio(streamUrl);
+      audioPlayerRef.current = audio;
+
+      audio.onplay = () => {
+        isSpeakingRef.current = true;
+        setAudioLoadingMsgId(null);
+        setCompanionState('speaking');
+      };
+      audio.onended = () => {
+        isSpeakingRef.current = false;
+        setCurrentlySpeakingMsgId(null);
+        setAudioLoadingMsgId(null);
+        setCompanionState('idle');
+      };
+      audio.onerror = (e) => {
+        console.warn('Backend Tamil TTS playback error:', e);
+        isSpeakingRef.current = false;
+        setCurrentlySpeakingMsgId(null);
+        setAudioLoadingMsgId(null);
+        setCompanionState('idle');
+        setTtsNotice(
+          language === 'ta'
+            ? 'தமிழ் குரல் ஒலியை இயக்க முடியவில்லை. நெட்வொர்க்கை சரிபார்க்கவும்.'
+            : 'Tamil voice playback failed. Please check network connection.'
+        );
+        setTimeout(() => setTtsNotice(null), 5000);
+      };
+      audio.play().catch((err) => {
+        console.warn('Audio play auto-policy notice (user interaction required):', err);
+        setCurrentlySpeakingMsgId(null);
+        setAudioLoadingMsgId(null);
+        setCompanionState('idle');
+      });
+    } catch (err) {
+      console.warn('Tamil TTS synthesis stream error:', err);
+      setCurrentlySpeakingMsgId(null);
+      setAudioLoadingMsgId(null);
+      setCompanionState('idle');
     }
   };
 
@@ -300,6 +338,7 @@ export function App() {
         id: turn.message_id,
         role: 'assistant',
         content: turn.content,
+        audio_url: turn.audio_url,
         companion_emotion: turn.companion_emotion,
         detected_emotion: turn.user_emotion,
         safety_notice: turn.safety_notice,
@@ -308,14 +347,28 @@ export function App() {
 
       setMessages((prev) => [...prev, companionReply]);
 
+      // Automatically sync conversation language if Tamil or English was requested
+      const isTurnTamil =
+        turn.language === 'ta' ||
+        turn.language.startsWith('ta') ||
+        /[\u0B80-\u0BFF]/.test(turn.content);
+
+      if (isTurnTamil && language !== 'ta') {
+        setLanguage('ta');
+        saveLanguage('ta');
+      } else if (!isTurnTamil && turn.language.startsWith('en') && language === 'ta') {
+        const isEnglishRequest = /english/i.test(text);
+        if (isEnglishRequest) {
+          setLanguage('en');
+          saveLanguage('en');
+        }
+      }
+
       // Process emotion through the theme engine (real API response)
       // The theme engine handles confidence filtering, smoothing, and hysteresis
       if (turn.user_emotion && turn.user_emotion !== 'neutral') {
-        // Create a properly structured inference result from the chat response
         themeEngine.processInference({
           primary_emotion: turn.user_emotion,
-          // The chat endpoint returns emotion as a label; we estimate confidence
-          // from the vocal signal if available, otherwise use moderate confidence
           confidence: voiceEmotion && voiceEmotion !== 'neutral' ? 0.72 : 0.6,
           distribution: { [turn.user_emotion]: 0.7, neutral: 0.3 },
         });
@@ -327,7 +380,12 @@ export function App() {
 
       // Speak reply if not in crisis
       if (!turn.safety_notice?.is_crisis) {
-        speakText(turn.content);
+        speakText(
+          turn.content,
+          turn.message_id,
+          isTurnTamil ? 'ta-IN' : 'en-US',
+          turn.audio_url
+        );
       } else {
         setCompanionState('idle');
       }
@@ -351,7 +409,7 @@ export function App() {
     ? 'dark' as const
     : 'light' as const;
 
-  const isTamil = language === 'ta';
+  const isTamil = language === 'ta' || language.startsWith('ta');
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -525,6 +583,44 @@ export function App() {
         />
       </div>
 
+      {/* Floating Audio Notice (Autoplay policy or network status) */}
+      {ttsNotice && (
+        <div
+          role="status"
+          style={{
+            maxWidth: '620px',
+            margin: '0 auto 12px',
+            padding: '10px 16px',
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid #F87171',
+            borderRadius: '12px',
+            color: 'var(--text-primary)',
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <span>⚠️ {ttsNotice}</span>
+          <button
+            onClick={() => setTtsNotice(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-primary)',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              padding: '0 4px',
+            }}
+            aria-label="Dismiss notice"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Main Content Viewport */}
       <main
         id="main-content"
@@ -547,9 +643,13 @@ export function App() {
               messages={messages}
               onSendMessage={handleSendMessage}
               isLoading={isLoading}
-              onSpeakMessage={speakText}
+              onSpeakMessage={(content, mId, audioUrl) => {
+                const hasTamil = /[\u0B80-\u0BFF]/.test(content);
+                speakText(content, mId, hasTamil ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'), audioUrl);
+              }}
               onStopSpeaking={stopSpeaking}
               currentlySpeakingMsgId={currentlySpeakingMsgId}
+              audioLoadingMsgId={audioLoadingMsgId}
               language={language}
             />
           </div>
@@ -578,9 +678,13 @@ export function App() {
                 messages={messages}
                 onSendMessage={handleSendMessage}
                 isLoading={isLoading}
-                onSpeakMessage={speakText}
+                onSpeakMessage={(content, mId, audioUrl) => {
+                  const hasTamil = /[\u0B80-\u0BFF]/.test(content);
+                  speakText(content, mId, hasTamil ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'), audioUrl);
+                }}
                 onStopSpeaking={stopSpeaking}
                 currentlySpeakingMsgId={currentlySpeakingMsgId}
+                audioLoadingMsgId={audioLoadingMsgId}
                 language={language}
               />
             </div>

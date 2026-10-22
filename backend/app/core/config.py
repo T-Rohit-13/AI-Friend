@@ -47,7 +47,10 @@ class Settings(BaseSettings):
 
     # Voice / Audio Pipeline
     ASR_PROVIDER: str = "web_speech"  # "whisper" or "web_speech"
-    TTS_PROVIDER: str = "web_speech"  # "edge_tts", "kokoro", or "web_speech"
+    TTS_PROVIDER: str = "edge_tts"  # "edge_tts", "gtts", or "web_speech"
+    TAMIL_TTS_VOICE: str = "ta-IN-PallaviNeural"  # Microsoft Pallavi Neural (Tamil - India)
+    ENGLISH_TTS_VOICE: str = "en-US-JennyNeural"  # Microsoft Jenny Neural (English - US)
+    HINDI_TTS_VOICE: str = "hi-IN-SwaraNeural"    # Microsoft Swara Neural (Hindi - India)
     EMOTION_ENGINE: str = "heuristic"  # "heuristic" or "neural"
 
     # Email & Account Verification

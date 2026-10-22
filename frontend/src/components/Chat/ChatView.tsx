@@ -6,9 +6,10 @@ interface ChatViewProps {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   isLoading: boolean;
-  onSpeakMessage: (text: string, msgId?: string) => void;
+  onSpeakMessage: (text: string, msgId?: string, audioUrl?: string | null) => void;
   onStopSpeaking?: () => void;
   currentlySpeakingMsgId?: string | null;
+  audioLoadingMsgId?: string | null;
   language: string;
 }
 
@@ -19,6 +20,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onSpeakMessage,
   onStopSpeaking,
   currentlySpeakingMsgId,
+  audioLoadingMsgId,
   language,
 }) => {
   const [inputText, setInputText] = useState('');
@@ -170,7 +172,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       onStopSpeaking?.();
     } else {
       setPlayedMsgIds((prev) => new Set(prev).add(msg.id));
-      onSpeakMessage(msg.content, msg.id);
+      onSpeakMessage(msg.content, msg.id, msg.audio_url);
     }
   };
 
@@ -258,6 +260,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           const isUser = msg.role === 'user';
           const isCrisis = msg.safety_notice?.is_crisis;
           const isSpeakingThis = currentlySpeakingMsgId === msg.id;
+          const isLoadingAudioThis = audioLoadingMsgId === msg.id;
           const hasBeenPlayed = playedMsgIds.has(msg.id);
 
           return (
@@ -405,6 +408,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <button
                           onClick={() => handleAudioControl(msg)}
+                          disabled={isLoadingAudioThis}
                           className="btn-ghost"
                           style={{
                             padding: '3px 10px',
@@ -412,17 +416,37 @@ export const ChatView: React.FC<ChatViewProps> = ({
                             fontWeight: 600,
                             background: isSpeakingThis
                               ? 'rgba(239, 68, 68, 0.15)'
+                              : isLoadingAudioThis
+                              ? 'var(--bg-surface)'
                               : 'var(--current-emotion-soft)',
-                            color: isSpeakingThis ? '#EF4444' : 'var(--text-primary)',
-                            border: `1px solid ${isSpeakingThis ? '#EF4444' : 'var(--border-subtle)'}`,
+                            color: isSpeakingThis
+                              ? '#EF4444'
+                              : 'var(--text-primary)',
+                            border: `1px solid ${
+                              isSpeakingThis ? '#EF4444' : 'var(--border-subtle)'
+                            }`,
                             borderRadius: '10px',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '4px',
+                            gap: '5px',
+                            cursor: isLoadingAudioThis ? 'wait' : 'pointer',
                           }}
-                          title={isSpeakingThis ? t.stopAudio : hasBeenPlayed ? t.replayAudio : t.readAloud}
+                          title={
+                            isLoadingAudioThis
+                              ? (isTamil ? 'குரல் பதிவிறக்கப்படுகிறது...' : 'Loading audio stream...')
+                              : isSpeakingThis
+                              ? t.stopAudio
+                              : hasBeenPlayed
+                              ? t.replayAudio
+                              : t.readAloud
+                          }
                         >
-                          {isSpeakingThis ? (
+                          {isLoadingAudioThis ? (
+                            <>
+                              <span style={{ fontSize: '0.8rem' }}>⏳</span>
+                              <span>{isTamil ? 'ஏற்றுகிறது...' : 'Loading...'}</span>
+                            </>
+                          ) : isSpeakingThis ? (
                             <>
                               <span>⏹️</span>
                               <span>{t.stopAudio}</span>
@@ -434,7 +458,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                             </>
                           ) : (
                             <>
-                              <span>▶️</span>
+                              <span>🔊</span>
                               <span>{t.readAloud}</span>
                             </>
                           )}

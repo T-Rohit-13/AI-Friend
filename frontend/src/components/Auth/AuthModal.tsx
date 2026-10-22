@@ -25,7 +25,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isTamil = language === 'ta';
+  const isTamil = language === 'ta' || language.startsWith('ta');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

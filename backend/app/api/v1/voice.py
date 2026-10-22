@@ -66,9 +66,16 @@ async def transcribe_audio(
 
 from fastapi.responses import Response
 import urllib.parse
+import io
 import logging
+from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def is_tamil_script(text: str) -> bool:
+    """Checks if text contains Tamil Unicode block characters (U+0B80 to U+0BFF)."""
+    return any(0x0B80 <= ord(c) <= 0x0BFF for c in text)
 
 
 @router.get("/tts")
@@ -78,22 +85,37 @@ async def get_tts_audio(
     voice: Optional[str] = None,
 ):
     """
-    Synthesizes speech to MP3 stream using edge-tts.
-    Tamil: 'ta-IN-PallaviNeural' or 'ta-IN-ValluvarNeural'
-    English: 'en-US-JennyNeural' or 'en-US-GuyNeural'
+    Synthesizes speech to MP3 stream using high-fidelity Edge-TTS neural voices,
+    with automatic resilient fallback to Google TTS (gTTS).
+    
+    Guaranteed Tamil voice mapping:
+    - Primary: Microsoft Pallavi Neural ('ta-IN-PallaviNeural') or Valluvar ('ta-IN-ValluvarNeural')
+    - Fallback: Google TTS Tamil ('ta')
+    
+    English voice mapping:
+    - Primary: Microsoft Jenny Neural ('en-US-JennyNeural')
+    - Fallback: Google TTS English ('en')
     """
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
 
+    has_tamil_chars = is_tamil_script(text)
+    lang_lower = (language or "en").lower().strip()
+    is_tamil = has_tamil_chars or lang_lower in ("ta", "ta-in", "tamil") or lang_lower.startswith("ta")
+
+    # Select appropriate voice
     voice_name = voice
     if not voice_name:
-        if language == "ta":
-            voice_name = "ta-IN-PallaviNeural"
-        elif language == "hi":
-            voice_name = "hi-IN-SwaraNeural"
+        if is_tamil:
+            voice_name = getattr(settings, "TAMIL_TTS_VOICE", "ta-IN-PallaviNeural")
+        elif lang_lower in ("hi", "hi-in", "hindi") or lang_lower.startswith("hi"):
+            voice_name = getattr(settings, "HINDI_TTS_VOICE", "hi-IN-SwaraNeural")
+        elif lang_lower in ("es", "es-es", "spanish") or lang_lower.startswith("es"):
+            voice_name = "es-ES-ElviraNeural"
         else:
-            voice_name = "en-US-JennyNeural"
+            voice_name = getattr(settings, "ENGLISH_TTS_VOICE", "en-US-JennyNeural")
 
+    # 1. Primary Neural TTS via edge-tts
     try:
         import edge_tts
         communicate = edge_tts.Communicate(text, voice_name)
@@ -101,10 +123,67 @@ async def get_tts_audio(
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio_stream.extend(chunk["data"])
-        return Response(content=bytes(audio_stream), media_type="audio/mpeg")
-    except Exception as e:
-        logger.error(f"TTS synthesis error: {e}")
-        raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
+
+        if len(audio_stream) > 0:
+            return Response(
+                content=bytes(audio_stream),
+                media_type="audio/mpeg",
+                headers={
+                    "X-TTS-Provider": "edge_tts",
+                    "X-TTS-Voice": voice_name,
+                    "X-TTS-Language": "ta-IN" if is_tamil else "en-US",
+                    "Cache-Control": "public, max-age=86400",
+                },
+            )
+    except Exception as edge_err:
+        logger.warning(f"Edge-TTS synthesis warning for '{voice_name}': {edge_err}. Attempting gTTS fallback...")
+
+    # 2. Resilient Fallback via gTTS
+    try:
+        from gtts import gTTS
+        gtts_lang = "ta" if is_tamil else ("hi" if lang_lower.startswith("hi") else "en")
+        tts = gTTS(text=text, lang=gtts_lang)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        audio_bytes = fp.read()
+        return Response(
+            content=audio_bytes,
+            media_type="audio/mpeg",
+            headers={
+                "X-TTS-Provider": "gtts",
+                "X-TTS-Voice": f"google_{gtts_lang}",
+                "X-TTS-Language": "ta-IN" if is_tamil else "en-US",
+                "Cache-Control": "public, max-age=86400",
+            },
+        )
+    except Exception as gtts_err:
+        logger.error(f"gTTS fallback error: {gtts_err}")
+        try:
+            import time
+            time.sleep(0.5)
+            from gtts import gTTS
+            tts = gTTS(text=text, lang=gtts_lang)
+            fp = io.BytesIO()
+            tts.write_to_fp(fp)
+            fp.seek(0)
+            audio_bytes = fp.read()
+            return Response(
+                content=audio_bytes,
+                media_type="audio/mpeg",
+                headers={
+                    "X-TTS-Provider": "gtts",
+                    "X-TTS-Voice": f"google_{gtts_lang}",
+                    "X-TTS-Language": "ta-IN" if is_tamil else "en-US",
+                    "Cache-Control": "public, max-age=86400",
+                },
+            )
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=500,
+            detail=f"TTS synthesis failed on both primary and fallback providers. Primary voice '{voice_name}'."
+        )
 
 
 @router.post("/synthesize")
@@ -116,6 +195,10 @@ async def synthesize_speech(
     Synthesize text to speech voice parameters.
     Returns optimal client Web Speech parameters or backend audio stream URL.
     """
+    has_tamil_chars = is_tamil_script(payload.text)
+    lang_lower = (payload.language or "en").lower().strip()
+    is_tamil = has_tamil_chars or lang_lower in ("ta", "ta-in", "tamil") or lang_lower.startswith("ta")
+
     voice_mapping = {
         "en": "en-US-JennyNeural",
         "es": "es-ES-ElviraNeural",
@@ -125,15 +208,22 @@ async def synthesize_speech(
         "de": "de-DE-KatjaNeural",
         "ja": "ja-JP-NanamiNeural",
     }
-    recommended_voice = voice_mapping.get(payload.language, "en-US-JennyNeural")
-    encoded_text = urllib.parse.quote(payload.text[:300])
+    
+    if is_tamil:
+        recommended_voice = "ta-IN-PallaviNeural"
+        target_lang = "ta-IN"
+    else:
+        recommended_voice = voice_mapping.get(payload.language[:2], "en-US-JennyNeural")
+        target_lang = payload.language
+
+    encoded_text = urllib.parse.quote(payload.text)
 
     return {
         "status": "success",
         "text": payload.text,
-        "language": payload.language,
+        "language": target_lang,
         "recommended_voice": recommended_voice,
         "rate": payload.rate,
         "pitch": payload.pitch,
-        "audio_stream_url": f"/api/v1/voice/tts?text={encoded_text}&language={payload.language}",
+        "audio_stream_url": f"/api/v1/voice/tts?text={encoded_text}&language={target_lang}",
     }

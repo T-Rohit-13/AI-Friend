@@ -10,6 +10,7 @@ Extracts:
 import io
 import math
 import struct
+import wave
 import torch
 import torch.nn.functional as F
 from typing import Dict, Any, Tuple
@@ -18,35 +19,72 @@ from typing import Dict, Any, Tuple
 def decode_wav_to_tensor(audio_bytes: bytes) -> torch.Tensor:
     """
     Decodes audio bytes (PCM WAV or raw audio) into a 1D float32 tensor scaled to [-1.0, 1.0].
+    Safely extracts samples using Python's wave module or raw PCM fallback.
+    Returns silence (zeros) on empty or invalid input instead of synthetic tones.
     """
     if not audio_bytes or len(audio_bytes) < 44:
-        # Fallback sine wave
-        t = torch.linspace(0, 1, 16000)
-        return torch.sin(2 * math.pi * 440 * t)
+        return torch.zeros(16000, dtype=torch.float32)
 
+    # 1. Attempt standard WAV decoding via wave.open
+    try:
+        with io.BytesIO(audio_bytes) as buf:
+            with wave.open(buf, "rb") as wf:
+                n_channels = wf.getnchannels()
+                sampwidth = wf.getsampwidth()
+                framerate = wf.getframerate()
+                n_frames = wf.getnframes()
+                raw_bytes = wf.readframes(n_frames)
+
+                if sampwidth == 2:  # 16-bit PCM
+                    num_samples = len(raw_bytes) // 2
+                    samples = struct.unpack(f"<{num_samples}h", raw_bytes[:num_samples * 2])
+                    tensor = torch.tensor(samples, dtype=torch.float32) / 32768.0
+                elif sampwidth == 1:  # 8-bit unsigned
+                    samples = struct.unpack(f"<{len(raw_bytes)}B", raw_bytes)
+                    tensor = (torch.tensor(samples, dtype=torch.float32) - 128.0) / 128.0
+                elif sampwidth == 4:  # 32-bit int
+                    num_samples = len(raw_bytes) // 4
+                    samples = struct.unpack(f"<{num_samples}i", raw_bytes[:num_samples * 4])
+                    tensor = torch.tensor(samples, dtype=torch.float32) / 2147483648.0
+                else:
+                    return torch.zeros(16000, dtype=torch.float32)
+
+                # Downmix stereo to mono
+                if n_channels > 1 and len(tensor) >= n_channels:
+                    tensor = tensor.view(-1, n_channels).mean(dim=1)
+
+                # Resample to 16,000 Hz if different
+                if framerate != 16000 and framerate > 0 and len(tensor) > 10:
+                    target_len = int(len(tensor) * (16000.0 / framerate))
+                    tensor = F.interpolate(
+                        tensor.view(1, 1, -1),
+                        size=target_len,
+                        mode="linear",
+                        align_corners=False,
+                    ).squeeze()
+
+                if len(tensor) == 0:
+                    return torch.zeros(16000, dtype=torch.float32)
+                return tensor
+    except Exception:
+        pass
+
+    # 2. Attempt RIFF data chunk direct parsing
     try:
         if audio_bytes.startswith(b"RIFF"):
             data_pos = audio_bytes.find(b"data")
-            if data_pos == -1:
-                data_pos = 44
-            else:
-                data_pos += 8
-
-            raw_samples = audio_bytes[data_pos:]
-            num_samples = len(raw_samples) // 2
-            fmt = f"<{num_samples}h"
-            samples = struct.unpack(fmt, raw_samples[: num_samples * 2])
-            tensor = torch.tensor(samples, dtype=torch.float32) / 32768.0
-            return tensor
-        else:
-            # Attempt 16-bit raw PCM conversion
-            num_samples = len(audio_bytes) // 2
-            fmt = f"<{num_samples}h"
-            samples = struct.unpack(fmt, audio_bytes[: num_samples * 2])
-            return torch.tensor(samples, dtype=torch.float32) / 32768.0
+            if data_pos != -1:
+                raw_samples = audio_bytes[data_pos + 8:]
+                num_samples = len(raw_samples) // 2
+                if num_samples > 0:
+                    samples = struct.unpack(f"<{num_samples}h", raw_samples[: num_samples * 2])
+                    return torch.tensor(samples, dtype=torch.float32) / 32768.0
     except Exception:
-        t = torch.linspace(0, 1, 16000)
-        return torch.sin(2 * math.pi * 440 * t)
+        pass
+
+    # 3. Fallback: return silence (zero tensor) — never invent frequencies!
+    return torch.zeros(16000, dtype=torch.float32)
+
 
 
 def extract_spectrogram(
@@ -136,18 +174,19 @@ def extract_acoustic_tone_features(waveform: torch.Tensor, sample_rate: int = 16
     spectral_centroid = (torch.sum(freqs * spec) / (torch.sum(spec) + 1e-8)).item()
 
     # Determine acoustic tone label
+    # Silence / ambient noise:
+    if rms < 0.008:
+        tone = "silence"
     # High pitch + high energy = Excitement / Anger / Distress
-    # Low pitch + low energy = Sadness / Fatigue / Depression
-    # Steady moderate pitch + low ZCR = Calm / Warm
-    if pitch > 240 and rms > 0.15:
+    elif pitch > 240 and rms > 0.15:
         tone = "angry" if spectral_centroid > 2500 else "happy"
-    elif pitch > 210 and rms < 0.12:
+    elif pitch > 210 and rms > 0.07:
         tone = "anxious"
-    elif pitch < 120 and rms < 0.08:
+    elif pitch < 135 and rms < 0.08:
         tone = "sad"
-    elif rms < 0.04:
+    elif rms < 0.035:
         tone = "tired"
-    elif pitch < 160 and rms < 0.10:
+    elif pitch < 165 and rms < 0.09:
         tone = "calm"
     else:
         tone = "neutral"
