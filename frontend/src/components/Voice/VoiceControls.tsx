@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
 import { getThemeEngine } from '../../services/themeEngine';
+import { AudioRecorder } from '../../services/audioRecorder';
 
 interface VoiceControlsProps {
   onTranscript: (transcript: string, voiceEmotion?: string) => void;
@@ -22,19 +23,21 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   const [interimText, setInterimText] = useState('');
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [speechStatus, setSpeechStatus] = useState<string | null>(null);
-  const [detectedVoiceTone, setDetectedVoiceTone] = useState<string | null>(null);
+
+  // Verification stage state
+  const [pendingTranscript, setPendingTranscript] = useState<string | null>(null);
+  const [pendingTone, setPendingTone] = useState<string>('neutral');
+  const [confidenceScore, setConfidenceScore] = useState<number | null>(null);
 
   const recognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const isTamil = language === 'ta' || language.startsWith('ta');
 
-  // Normalize language for SpeechRecognition
+  const isTamil = language === 'ta' || language.startsWith('ta');
   const recognitionLang = isTamil ? 'ta-IN' : 'en-US';
 
-  // Initialize Web Speech Recognition
+  // Initialize Web Speech Recognition for live real-time feedback
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -47,39 +50,28 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
         recognition.lang = recognitionLang;
 
         recognition.onresult = (event: any) => {
-          let finalTranscript = '';
           let interim = '';
+          let final = '';
 
           for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript;
+              final += event.results[i][0].transcript;
             } else {
               interim += event.results[i][0].transcript;
             }
           }
 
-          setInterimText(interim);
-
-          if (finalTranscript.trim()) {
-            stopRecordingAndSubmit(finalTranscript.trim());
-          }
+          setInterimText(interim || final);
         };
 
         recognition.onerror = (event: any) => {
           console.warn('Speech recognition warning:', event.error);
           if (event.error === 'not-allowed') {
-            setSpeechStatus(isTamil ? 'மைக்ரோஃபோன் அனுமதி தேவை (Mic permission needed)' : 'Microphone permission blocked. Please allow mic access.');
-          } else if (event.error === 'network') {
-            setSpeechStatus(isTamil ? 'இணைப்பு பிழை - ஆடியோ பதிவு பயன்படுத்தப்படுகிறது' : 'Network issue with cloud ASR, switching to audio recording...');
-          }
-        };
-
-        recognition.onend = () => {
-          if (isListening) {
-            // Auto restart if still supposed to listen
-            try {
-              recognition.start();
-            } catch {}
+            setSpeechStatus(
+              isTamil
+                ? 'மைக்ரோஃபோன் அனுமதி தேவை (Mic permission needed)'
+                : 'Microphone permission blocked. Please allow mic access.'
+            );
           }
         };
 
@@ -96,21 +88,20 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
         } catch {}
       }
     };
-  }, [recognitionLang, isListening, isTamil]);
+  }, [recognitionLang, isTamil]);
 
-  // Start Audio Stream & MediaRecorder
+  // Start Audio Recording
   const startRecording = async () => {
     setSpeechStatus(null);
     setInterimText('');
-    setDetectedVoiceTone(null);
-    audioChunksRef.current = [];
+    setPendingTranscript(null);
+    setConfidenceScore(null);
 
-    // Stop companion speech
     if (isSpeaking) {
       onInterruptSpeech();
     }
 
-    // 1. Start Web Speech Recognition
+    // 1. Start Web Speech Recognition if available
     if (recognitionRef.current) {
       try {
         recognitionRef.current.lang = recognitionLang;
@@ -118,31 +109,28 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
       } catch {}
     }
 
-    // 2. Start MediaRecorder for acoustic tone analysis and backend ASR
+    // 2. Start AudioRecorder for clean 16kHz PCM WAV recording
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.start(250);
+      const recorder = new AudioRecorder();
+      audioRecorderRef.current = recorder;
+      await recorder.start();
       setIsListening(true);
     } catch (err: any) {
-      console.warn('MediaRecorder mic access error:', err);
-      setSpeechStatus(isTamil ? 'மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்' : 'Please allow microphone access to talk.');
+      console.warn('Microphone access error:', err);
+      setSpeechStatus(
+        isTamil
+          ? 'மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்'
+          : `Microphone access error: ${err.message || 'Please check mic permissions.'}`
+      );
       setIsListening(false);
     }
   };
 
-  // Stop Recording and Process Voice Tone & Transcript
-  const stopRecordingAndSubmit = async (recognizedText?: string) => {
+  // Stop Recording & Process Transcript + Emotion
+  const stopRecordingAndReview = async () => {
     setIsListening(false);
     setIsProcessingAudio(true);
+    const capturedInterim = interimText;
     setInterimText('');
 
     if (recognitionRef.current) {
@@ -151,97 +139,111 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
       } catch {}
     }
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    if (!audioRecorderRef.current) {
+      setIsProcessingAudio(false);
+      return;
     }
 
-    // Short timeout to ensure all audio chunks are collected
-    setTimeout(async () => {
-      let finalSpeechText = recognizedText || '';
+    try {
+      const { blob } = await audioRecorderRef.current.stop();
+
+      let detectedText = capturedInterim.trim();
       let vocalTone = 'neutral';
+      let conf: number | null = null;
 
-      if (audioChunksRef.current.length > 0) {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+      // 1. Analyze genuine vocal emotion from real recorded audio
+      try {
+        const toneResult = await api.inferAudioEmotion(blob);
+        if (toneResult && toneResult.primary_emotion) {
+          vocalTone = toneResult.primary_emotion;
+          conf = toneResult.confidence ? Math.round(toneResult.confidence * 100) : null;
+          setConfidenceScore(conf);
 
-        // 1. Analyze voice acoustic tone via real emotion model API
-        // The result is fed into the ThemeEngine for smoothing/hysteresis
-        try {
-          const toneResult = await api.inferAudioEmotion(audioBlob);
-          if (toneResult && toneResult.primary_emotion) {
-            vocalTone = toneResult.primary_emotion;
-            setDetectedVoiceTone(vocalTone);
-
-            // Feed real inference into ThemeEngine (handles confidence
-            // filtering, temporal smoothing, and hysteresis)
-            const themeEngine = getThemeEngine();
-            themeEngine.processInference({
-              primary_emotion: toneResult.primary_emotion,
-              confidence: toneResult.confidence ?? 0.7,
-              distribution: toneResult.distribution ?? { [toneResult.primary_emotion]: 0.7 },
-            });
-          }
-        } catch (e) {
-          console.warn('Voice tone inference error:', e);
-          // Report unavailability so theme engine retains current/default state
-          getThemeEngine().reportModelUnavailable();
+          // Feed into ThemeEngine
+          getThemeEngine().processInference({
+            primary_emotion: toneResult.primary_emotion,
+            confidence: toneResult.confidence ?? 0.7,
+            distribution: toneResult.distribution ?? { [toneResult.primary_emotion]: 0.7 },
+          });
         }
+      } catch (e: any) {
+        console.warn('Vocal emotion analysis notice:', e.message);
+        getThemeEngine().reportModelUnavailable();
+      }
 
-        // 2. If browser speech didn't catch text, run backend transcribe
-        if (!finalSpeechText.trim()) {
-          try {
-            finalSpeechText = await api.transcribeAudio(audioBlob, language);
-          } catch (e) {
-            console.warn('Backend ASR fallback error:', e);
+      // 2. Transcribe via backend ASR if Web Speech was empty or unreliable
+      if (!detectedText) {
+        try {
+          const asrResult = await api.transcribeAudio(blob, isTamil ? 'ta' : 'en');
+          if (asrResult && asrResult.text) {
+            detectedText = asrResult.text.trim();
           }
+        } catch (e: any) {
+          console.warn('Backend ASR error:', e.message);
+          setSpeechStatus(e.message || 'Could not understand audio.');
         }
       }
 
       setIsProcessingAudio(false);
 
-      if (finalSpeechText.trim()) {
-        onTranscript(finalSpeechText.trim(), vocalTone);
+      if (detectedText) {
+        // Present transcript to user for verification and correction
+        setPendingTranscript(detectedText);
+        setPendingTone(vocalTone);
       } else {
-        setSpeechStatus(isTamil ? 'குரல் கேட்கவில்லை. மீண்டும் பேசவும்.' : 'No clear speech detected. Please tap and speak again.');
+        setSpeechStatus(
+          isTamil
+            ? 'குரல் கேட்கவில்லை. மீண்டும் பேசவும்.'
+            : 'No clear speech detected. Please speak closer to your microphone and try again.'
+        );
       }
-    }, 400);
+    } catch (err: any) {
+      setIsProcessingAudio(false);
+      setSpeechStatus(`Audio recording error: ${err.message}`);
+    }
   };
 
-  // Toggle button click
+  const handleConfirmSend = () => {
+    if (!pendingTranscript || !pendingTranscript.trim()) return;
+    onTranscript(pendingTranscript.trim(), pendingTone);
+    setPendingTranscript(null);
+    setSpeechStatus(null);
+  };
+
+  const handleCancelReview = () => {
+    setPendingTranscript(null);
+    setSpeechStatus(null);
+  };
+
   const toggleListening = () => {
     if (isListening) {
-      stopRecordingAndSubmit();
+      stopRecordingAndReview();
     } else {
       startRecording();
     }
   };
 
-  // Audio Waveform Canvas Animation
+  // Audio Waveform Visualizer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let step = 0;
+    let phase = 0;
 
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (isListening || isSpeaking || isProcessingAudio) {
-        step += 0.08;
-        const width = canvas.width;
-        const height = canvas.height;
-        const mid = height / 2;
-
+      if (isListening) {
+        phase += 0.08;
+        const centerY = canvas.height / 2;
         ctx.beginPath();
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = isListening ? 'var(--color-primary-400)' : isProcessingAudio ? '#818cf8' : '#fbbf24';
+        ctx.strokeStyle = isTamil ? '#9D8DF1' : '#78C6F1';
+        ctx.lineWidth = 2.5;
 
-        for (let x = 0; x < width; x += 3) {
-          const freq = isListening ? 0.03 : 0.05;
-          const amplitude = isListening ? 22 : 14;
-          const y = mid + Math.sin(x * freq + step) * Math.sin(step * 0.5) * amplitude;
+        for (let x = 0; x < canvas.width; x++) {
+          const y = centerY + Math.sin(x * 0.05 + phase) * 12 * Math.sin(x * 0.02);
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
@@ -254,106 +256,200 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
     render();
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
     };
-  }, [isListening, isSpeaking, isProcessingAudio]);
+  }, [isListening, isTamil]);
 
   return (
     <div
-      className="glass-panel"
       style={{
-        padding: '24px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '16px',
+        gap: '12px',
+        padding: '16px 20px',
         borderRadius: '20px',
+        background: 'var(--bg-surface, #F8FAFD)',
+        border: '1px solid var(--border-subtle, rgba(0,0,0,0.06))',
         maxWidth: '560px',
         margin: '0 auto',
+        width: '100%',
       }}
     >
-      {/* Waveform Visualizer */}
+      {/* Waveform Canvas */}
       <canvas
         ref={canvasRef}
-        width={360}
-        height={65}
+        width={320}
+        height={36}
         style={{
           width: '100%',
-          maxWidth: '360px',
-          height: '65px',
-          borderRadius: '12px',
-          background: 'rgba(0, 0, 0, 0.25)',
+          maxWidth: '320px',
+          height: '36px',
+          opacity: isListening ? 1 : 0.2,
+          transition: 'opacity 300ms ease',
         }}
       />
 
-      {/* Voice Tone Feedback */}
-      {detectedVoiceTone && (
+      {/* Main Record Button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <button
+          onClick={toggleListening}
+          disabled={isProcessingAudio || Boolean(pendingTranscript)}
+          style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: isListening
+              ? '#E53E3E'
+              : 'linear-gradient(135deg, var(--primary, #78C6F1), var(--secondary, #9D8DF1))',
+            color: '#FFF',
+            border: 'none',
+            fontSize: '1.6rem',
+            cursor: isProcessingAudio || Boolean(pendingTranscript) ? 'not-allowed' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: isListening
+              ? '0 0 24px rgba(229, 62, 62, 0.5)'
+              : '0 8px 20px rgba(120, 198, 241, 0.35)',
+            transform: isListening ? 'scale(1.08)' : 'scale(1)',
+            transition: 'all 250ms ease',
+          }}
+          title={isListening ? 'Click to stop and verify speech' : 'Click to talk into microphone'}
+          aria-label={isListening ? 'Stop listening' : 'Start listening'}
+        >
+          {isProcessingAudio ? '⏳' : isListening ? '⏹️' : '🎙️'}
+        </button>
+      </div>
+
+      {/* Status Label */}
+      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-secondary, #666)' }}>
+        {isListening
+          ? (isTamil ? '🎙️ கேட்கிறது (Listening in Tamil)... Click ⏹️ when done' : '🎙️ Listening in English... Click ⏹️ when done')
+          : isProcessingAudio
+          ? 'Analyzing speech & acoustic tone...'
+          : (isTamil ? 'பேச மைக்ரோஃபோனைத் தட்டவும் (Tap mic to speak in Tamil)' : 'Tap mic to speak with your companion')}
+      </div>
+
+      {/* Live Interim Transcript Bubble */}
+      {isListening && interimText && (
         <div
           style={{
-            fontSize: '0.82rem',
-            padding: '4px 12px',
-            borderRadius: '16px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid var(--current-emotion-color)',
-            color: 'var(--current-emotion-color)',
-            fontWeight: 600,
+            padding: '8px 16px',
+            borderRadius: '12px',
+            background: 'var(--bg-surface-elevated, #FFF)',
+            border: '1px solid var(--border-subtle, #DDD)',
+            fontSize: '0.88rem',
+            fontStyle: 'italic',
+            color: 'var(--text-primary, #333)',
           }}
         >
-          🎙️ {isTamil ? 'கண்டறியப்பட்ட குரல் தொனி:' : 'Vocal Tone Detected:'} {detectedVoiceTone.toUpperCase()}
+          "{interimText}"
         </div>
       )}
 
-      {/* Main Mic Button */}
-      <button
-        onClick={toggleListening}
-        disabled={isProcessingAudio}
-        style={{
-          width: '84px',
-          height: '84px',
-          borderRadius: '50%',
-          border: 'none',
-          background: isListening
-            ? 'linear-gradient(135deg, #ef4444, #f97316)'
-            : 'linear-gradient(135deg, var(--color-primary-500), var(--color-amber-500))',
-          color: '#ffffff',
-          fontSize: '2rem',
-          cursor: isProcessingAudio ? 'wait' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: isListening ? '0 0 35px rgba(239, 68, 68, 0.6)' : '0 8px 24px rgba(20, 184, 166, 0.4)',
-          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-          transform: isListening ? 'scale(1.08)' : 'scale(1)',
-        }}
-        title={isListening ? 'Tap to Stop & Send' : 'Tap to Speak'}
-      >
-        {isListening ? '⏹️' : isProcessingAudio ? '⏳' : '🎙️'}
-      </button>
-
-      {/* Status Instruction */}
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
-          {isProcessingAudio
-            ? (isTamil ? 'குரல் தொனியை ஆய்வு செய்கிறது...' : 'Analyzing voice tone & transcribing...')
-            : isListening
-            ? (isTamil ? 'கேட்டுக்கொண்டிருக்கிறேன்... பேசி முடித்து நிறுத்த தட்டவும்' : 'Listening to your voice... Tap to finish & send')
-            : (isTamil ? 'பேச மைக்ரோஃபோனை தட்டவும் (Speak in English or Tamil)' : 'Tap microphone to speak to your AI Friend')}
+      {/* Error Message */}
+      {speechStatus && !pendingTranscript && (
+        <div
+          style={{
+            fontSize: '0.82rem',
+            color: '#C53030',
+            background: '#FFF5F5',
+            padding: '8px 14px',
+            borderRadius: '10px',
+            border: '1px solid #FEB2B2',
+            textAlign: 'center',
+          }}
+        >
+          ⚠️ {speechStatus}
         </div>
-        {interimText && (
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic' }}>
-            "{interimText}"
-          </div>
-        )}
-        {speechStatus && (
-          <div style={{ fontSize: '0.82rem', color: '#f87171', marginTop: '6px' }}>
-            {speechStatus}
-          </div>
-        )}
-      </div>
+      )}
 
-      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        🌐 {isTamil ? 'தமிழ் & ஆங்கில குரல் தொனி ஆதரவு' : 'Supports natural human voice in English & Tamil'}
-      </div>
+      {/* Transcript Verification & Correction Stage (Requirement 2) */}
+      {pendingTranscript !== null && (
+        <div
+          style={{
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            padding: '14px',
+            borderRadius: '14px',
+            background: 'var(--bg-surface-elevated, #FFFFFF)',
+            border: '2px solid var(--primary, #78C6F1)',
+            boxShadow: '0 8px 24px rgba(120, 198, 241, 0.2)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary, #78C6F1)' }}>
+              ✓ Verify Your Words Before Sending:
+            </span>
+            {confidenceScore !== null && (
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  background: '#EDF2F7',
+                  color: '#4A5568',
+                }}
+              >
+                Vocal Tone: <strong>{pendingTone}</strong> ({confidenceScore}%)
+              </span>
+            )}
+          </div>
+
+          <input
+            type="text"
+            value={pendingTranscript}
+            onChange={(e) => setPendingTranscript(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              fontSize: '0.94rem',
+              borderRadius: '8px',
+              border: '1px solid var(--border-subtle, #CCC)',
+              background: 'var(--bg-surface, #FDFDFD)',
+              color: 'var(--text-primary, #111)',
+              boxSizing: 'border-box',
+            }}
+            aria-label="Editable recognized speech text"
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              onClick={handleCancelReview}
+              className="btn-ghost"
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel / Re-record
+            </button>
+            <button
+              onClick={handleConfirmSend}
+              style={{
+                padding: '6px 18px',
+                borderRadius: '8px',
+                background: 'var(--primary, #78C6F1)',
+                color: '#FFF',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(120, 198, 241, 0.4)',
+              }}
+            >
+              Send to AI →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

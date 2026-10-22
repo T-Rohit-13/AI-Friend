@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navigation/Navbar';
 import type { AppMode } from './components/Navigation/Navbar';
 import { EmotionalAvatar } from './components/Avatar/EmotionalAvatar';
-import type { CompanionState } from './components/Avatar/EmotionalAvatar';
+import type { CompanionState, AvatarExpression } from './components/Avatar/EmotionalAvatar';
+import { DevTestingPanel } from './components/Dev/DevTestingPanel';
 import { ChatView } from './components/Chat/ChatView';
 import { VoiceControls } from './components/Voice/VoiceControls';
 import { GamesView } from './components/Games/GamesView';
@@ -37,8 +38,11 @@ export function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
-  // Settings Panel State
+  // Settings & Dev Panel State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDevPanelOpen, setIsDevPanelOpen] = useState(false);
+  const [autoMoodEnabled, setAutoMoodEnabled] = useState(true);
+  const [manualOverrideEmotion, setManualOverrideEmotion] = useState<AvatarExpression | null>(null);
 
   // Theme Engine Integration
   const themeEngine = getThemeEngine();
@@ -106,6 +110,9 @@ export function App() {
         } else if (e.key.toLowerCase() === 's') {
           e.preventDefault();
           setIsSettingsOpen((prev) => !prev);
+        } else if (e.key.toLowerCase() === 'd') {
+          e.preventDefault();
+          setIsDevPanelOpen((prev) => !prev);
         }
       }
     };
@@ -365,14 +372,16 @@ export function App() {
       }
 
       // Process emotion through the theme engine (real API response)
-      // The theme engine handles confidence filtering, smoothing, and hysteresis
-      if (turn.user_emotion && turn.user_emotion !== 'neutral') {
-        themeEngine.processInference({
-          primary_emotion: turn.user_emotion,
-          confidence: voiceEmotion && voiceEmotion !== 'neutral' ? 0.72 : 0.6,
-          distribution: { [turn.user_emotion]: 0.7, neutral: 0.3 },
-        });
-      }
+      const emotionSource = voiceEmotion && voiceEmotion !== 'neutral' ? 'voice' : 'text';
+      const effectiveUserEmotion = voiceEmotion && voiceEmotion !== 'neutral'
+        ? voiceEmotion
+        : (turn.user_emotion || 'neutral');
+
+      themeEngine.processInference({
+        primary_emotion: effectiveUserEmotion,
+        confidence: voiceEmotion && voiceEmotion !== 'neutral' ? 0.80 : 0.72,
+        distribution: { [effectiveUserEmotion]: 0.75, neutral: 0.25 },
+      }, emotionSource);
 
       if (turn.companion_emotion) {
         setCompanionEmotion(turn.companion_emotion);
@@ -450,6 +459,7 @@ export function App() {
         onLogout={handleLogout}
         userMood={themeState.activeMood}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenDevPanel={() => setIsDevPanelOpen(true)}
       />
 
       {/* Email Verification Status Banner if present */}
@@ -493,7 +503,12 @@ export function App() {
           emotion={themeState.activeMood !== 'neutral' ? themeState.activeMood : companionEmotion}
           state={companionState}
           personaName={persona === 'friendly_companion' ? 'AI Friend' : persona.replace('_', ' ')}
-          size={110}
+          size={115}
+          autoMoodEnabled={autoMoodEnabled}
+          manualOverrideEmotion={manualOverrideEmotion}
+          onToggleAutoMood={() => setAutoMoodEnabled((prev) => !prev)}
+          onSetOverrideEmotion={(emo) => setManualOverrideEmotion(emo)}
+          showControls={true}
         />
 
         {/* Dynamic Mood & Theme Pill */}
@@ -529,6 +544,11 @@ export function App() {
             <strong style={{ color: 'var(--current-emotion-color)' }}>
               {themeState.activeTokens.label}
             </strong>
+            {themeState.lastEmotionSource && !themeState.manualMoodOverride && (
+              <span style={{ fontSize: '0.72rem', opacity: 0.75, marginLeft: '6px', fontWeight: 500 }}>
+                ({themeState.lastEmotionSource === 'voice' ? 'Vocal Analysis' : 'Text Sentiment'})
+              </span>
+            )}
           </span>
           <span style={{ opacity: 0.4 }}>•</span>
           <span
@@ -633,7 +653,7 @@ export function App() {
           alignItems: 'center',
           padding: '0 16px 24px',
           width: '100%',
-          maxWidth: '880px',
+          maxWidth: '980px',
           margin: '0 auto',
         }}
       >
@@ -709,6 +729,16 @@ export function App() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         language={language}
+      />
+
+      {/* Developer Testing & Diagnostics Panel */}
+      <DevTestingPanel
+        isOpen={isDevPanelOpen}
+        onClose={() => setIsDevPanelOpen(false)}
+        activeLanguage={language}
+        onApplyEmotionToAvatar={(emo) => {
+          setManualOverrideEmotion(emo);
+        }}
       />
 
       {/* Login & Signup Modal */}

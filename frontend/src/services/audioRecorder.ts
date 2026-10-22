@@ -54,6 +54,7 @@ export class AudioRecorder {
   async stop(): Promise<{ blob: Blob; durationSeconds: number }> {
     this.isRecording = false;
     const durationSeconds = Math.max(0.1, (Date.now() - this.recordingStartTime) / 1000);
+    const sourceRate = this.audioContext ? this.audioContext.sampleRate : 44100;
 
     // Disconnect and release audio nodes
     if (this.sourceNode) {
@@ -92,7 +93,6 @@ export class AudioRecorder {
     }
 
     // Downsample to 16,000 Hz if context sampleRate is different (e.g. 44100 or 48000)
-    const sourceRate = this.audioContext?.sampleRate || 44100;
     const targetRate = 16000;
     const resampled = this.resampleAudio(merged, sourceRate, targetRate);
 

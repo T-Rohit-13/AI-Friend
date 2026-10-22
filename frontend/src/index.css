@@ -79,23 +79,23 @@
   --transition-ambient: all 600ms var(--ease-smooth);
 }
 
-/* ─── Dark Mode (Nocturnal Pastel Sanctuary) ─── */
+/* ─── Dark Mode (Modern Charcoal & Navy Sanctuary with Blue-Violet Accents) ─── */
 [data-theme='dark'] {
-  --bg-canvas: #12101F;
-  --bg-surface: rgba(26, 23, 44, 0.78);
-  --bg-surface-elevated: rgba(36, 32, 60, 0.85);
-  --bg-surface-card: rgba(29, 26, 48, 0.82);
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-visible: rgba(157, 141, 241, 0.35);
-  --text-primary: #F7F5FE;
-  --text-secondary: #B6ADC9;
-  --text-muted: #7E7497;
-  --shadow-card: 0 16px 42px -6px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
-  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --bg-canvas: #0B0E17;
+  --bg-surface: rgba(18, 24, 41, 0.85);
+  --bg-surface-elevated: rgba(26, 34, 56, 0.92);
+  --bg-surface-card: rgba(22, 29, 49, 0.88);
+  --border-subtle: rgba(129, 140, 248, 0.16);
+  --border-visible: rgba(129, 140, 248, 0.35);
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+  --shadow-card: 0 16px 42px -6px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(129, 140, 248, 0.12) inset;
+  --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.4);
 
-  --ambient-orb-1: rgba(157, 141, 241, 0.18);
-  --ambient-orb-2: rgba(99, 216, 165, 0.14);
-  --ambient-orb-3: rgba(120, 198, 241, 0.16);
+  --ambient-orb-1: rgba(99, 102, 241, 0.22);
+  --ambient-orb-2: rgba(139, 92, 246, 0.18);
+  --ambient-orb-3: rgba(56, 189, 248, 0.16);
 }
 
 /* ─── Calm / Low-Energy Mood Theme (Misty Lavender & Soft Teal) ─── */

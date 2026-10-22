@@ -89,6 +89,10 @@ async def infer_audio_emotion(
         primary_emotion=primary,
         confidence=conf,
         distribution=distribution,
+        acoustic_tone=prediction.get("acoustic_tone"),
+        pitch_mean=prediction.get("pitch_mean"),
+        rms_energy=prediction.get("rms_energy"),
+        uncertain=prediction.get("uncertain", False),
     )
 
 

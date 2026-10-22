@@ -23,7 +23,8 @@ export type EmotionLabel =
   | 'anxious'
   | 'calm'
   | 'surprised'
-  | 'frustrated';
+  | 'frustrated'
+  | 'uncertain';
 
 // ─── Mood category (grouped for UI theming) ───
 export type MoodCategory = 'neutral' | 'low' | 'positive' | 'uncertain';
@@ -61,20 +62,20 @@ const EMOTION_THEMES: Record<EmotionLabel, MoodThemeTokens> = {
   neutral: {
     emotionColor: '#78C6F1',
     emotionGlow: 'rgba(120, 198, 241, 0.35)',
-    label: 'Balanced & Peaceful',
+    label: 'Neutral',
     animationIntensity: 0.5,
-    transitionSpeed: 600,
+    transitionSpeed: 500,
     category: 'neutral',
     bgTint: 'rgba(120, 198, 241, 0.04)',
-    companionTone: 'warm',
+    companionTone: 'attentive',
     suggestedActivities: ['Chat', 'Games', 'Study'],
   },
   happy: {
     emotionColor: '#FA9F7A',
     emotionGlow: 'rgba(250, 159, 122, 0.38)',
-    label: 'Joyful & Vibrant',
+    label: 'Happy',
     animationIntensity: 0.85,
-    transitionSpeed: 500,
+    transitionSpeed: 450,
     category: 'positive',
     bgTint: 'rgba(250, 159, 122, 0.05)',
     companionTone: 'celebratory',
@@ -83,68 +84,79 @@ const EMOTION_THEMES: Record<EmotionLabel, MoodThemeTokens> = {
   sad: {
     emotionColor: '#9D8DF1',
     emotionGlow: 'rgba(157, 141, 241, 0.35)',
-    label: 'Gentle Support',
+    label: 'Sad',
     animationIntensity: 0.35,
-    transitionSpeed: 800,
+    transitionSpeed: 600,
     category: 'low',
     bgTint: 'rgba(157, 141, 241, 0.04)',
     companionTone: 'compassionate',
     suggestedActivities: ['Quiet conversation', 'Breathing exercise', 'Gentle riddle'],
   },
   angry: {
-    emotionColor: '#9D8DF1',
-    emotionGlow: 'rgba(157, 141, 241, 0.35)',
-    label: 'Cooling Safe Space',
-    animationIntensity: 0.35,
-    transitionSpeed: 700,
+    emotionColor: '#EF5350',
+    emotionGlow: 'rgba(239, 83, 80, 0.38)',
+    label: 'Frustrated',
+    animationIntensity: 0.4,
+    transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(157, 141, 241, 0.04)',
-    companionTone: 'calm',
+    bgTint: 'rgba(239, 83, 80, 0.04)',
+    companionTone: 'patient',
     suggestedActivities: ['Breathing exercise', 'Quiet conversation', 'Simple game'],
   },
   anxious: {
-    emotionColor: '#63D8A5',
-    emotionGlow: 'rgba(99, 216, 165, 0.35)',
-    label: 'Soothing Grounding',
-    animationIntensity: 0.3,
-    transitionSpeed: 800,
+    emotionColor: '#818CF8',
+    emotionGlow: 'rgba(129, 140, 248, 0.35)',
+    label: 'Anxious',
+    animationIntensity: 0.35,
+    transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(99, 216, 165, 0.04)',
+    bgTint: 'rgba(129, 140, 248, 0.04)',
     companionTone: 'grounding',
     suggestedActivities: ['Breathing exercise', 'Grounding activity', 'Calm conversation'],
   },
   calm: {
     emotionColor: '#63D8A5',
     emotionGlow: 'rgba(99, 216, 165, 0.35)',
-    label: 'Peaceful Calm',
+    label: 'Calm',
     animationIntensity: 0.45,
-    transitionSpeed: 700,
+    transitionSpeed: 500,
     category: 'neutral',
     bgTint: 'rgba(99, 216, 165, 0.04)',
-    companionTone: 'warm',
+    companionTone: 'peaceful',
     suggestedActivities: ['Study', 'Conversation', 'Riddles'],
   },
   surprised: {
-    emotionColor: '#B8ACF6',
-    emotionGlow: 'rgba(184, 172, 246, 0.38)',
-    label: 'Curious Wonder',
-    animationIntensity: 0.75,
-    transitionSpeed: 500,
+    emotionColor: '#FFB74D',
+    emotionGlow: 'rgba(255, 183, 77, 0.40)',
+    label: 'Excited',
+    animationIntensity: 0.85,
+    transitionSpeed: 450,
     category: 'positive',
-    bgTint: 'rgba(184, 172, 246, 0.05)',
+    bgTint: 'rgba(255, 183, 77, 0.05)',
     companionTone: 'playful',
     suggestedActivities: ['Riddles', 'Trivia', 'Explore a topic'],
   },
   frustrated: {
-    emotionColor: '#9D8DF1',
-    emotionGlow: 'rgba(157, 141, 241, 0.35)',
-    label: 'Patient Support',
-    animationIntensity: 0.35,
-    transitionSpeed: 750,
+    emotionColor: '#EF5350',
+    emotionGlow: 'rgba(239, 83, 80, 0.38)',
+    label: 'Frustrated',
+    animationIntensity: 0.4,
+    transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(157, 141, 241, 0.04)',
+    bgTint: 'rgba(239, 83, 80, 0.04)',
     companionTone: 'patient',
     suggestedActivities: ['Break activity', 'Simple game', 'Breathing exercise'],
+  },
+  uncertain: {
+    emotionColor: '#94A3B8',
+    emotionGlow: 'rgba(148, 163, 184, 0.30)',
+    label: 'Mood uncertain',
+    animationIntensity: 0.35,
+    transitionSpeed: 500,
+    category: 'uncertain',
+    bgTint: 'rgba(148, 163, 184, 0.03)',
+    companionTone: 'attentive',
+    suggestedActivities: ['Chat', 'Games'],
   },
 };
 
@@ -158,32 +170,10 @@ export interface EmotionInferenceResult {
   rms_energy?: number;
 }
 
-// ─── Smoothing Configuration ───
-const CONFIG = {
-  /** Minimum confidence to consider a prediction actionable */
-  CONFIDENCE_THRESHOLD: 0.55,
-  /** Higher confidence required to switch AWAY from current mood */
-  HYSTERESIS_THRESHOLD: 0.65,
-  /** Number of consistent readings required before applying a mood change */
-  CONSISTENT_READINGS_REQUIRED: 3,
-  /** Maximum time window (ms) for consistent readings */
-  CONSISTENCY_WINDOW_MS: 15000,
-  /** Minimum interval (ms) between theme transitions */
-  MIN_TRANSITION_INTERVAL_MS: 5000,
-  /** Maximum number of readings to keep in history */
-  MAX_HISTORY_SIZE: 10,
-} as const;
-
-// ─── Internal tracking state ───
-interface PredictionEntry {
-  emotion: EmotionLabel;
-  confidence: number;
-  timestamp: number;
-}
 
 // ─── Theme Engine State ───
 export interface ThemeEngineState {
-  /** Current active mood (after smoothing) */
+  /** Current active mood */
   activeMood: EmotionLabel;
   /** Current theme tokens */
   activeTokens: MoodThemeTokens;
@@ -195,6 +185,8 @@ export interface ThemeEngineState {
   manualMoodOverride: EmotionLabel | null;
   /** Last model prediction (raw, before smoothing) */
   lastRawPrediction: EmotionInferenceResult | null;
+  /** Source of last detected emotion (voice vs text) */
+  lastEmotionSource: 'voice' | 'text' | null;
   /** Whether the model is available */
   modelAvailable: boolean;
 }
@@ -203,20 +195,19 @@ export interface ThemeEngineState {
  * Centralized Adaptive Theme Engine
  *
  * Responsibilities:
- * 1. Process emotion predictions with confidence filtering
- * 2. Apply temporal smoothing / hysteresis to prevent flickering
- * 3. Respect user overrides at all times
- * 4. Expose design tokens for the active theme state
- * 5. Never claim therapeutic effect
+ * 1. Process genuine emotion predictions from text and voice
+ * 2. Update mood reactive state immediately on valid prediction
+ * 3. Support honest "uncertain" and "neutral" handling for low confidence
+ * 4. Respect user overrides at all times
+ * 5. Expose design tokens for the active theme state
  */
 export class ThemeEngine {
-  private predictionHistory: PredictionEntry[] = [];
-  private lastTransitionTime = 0;
   private currentMood: EmotionLabel = 'neutral';
   private _moodAdaptationEnabled = true;
   private _userTheme: UserTheme = 'dark';
   private _manualMoodOverride: EmotionLabel | null = null;
   private _lastRawPrediction: EmotionInferenceResult | null = null;
+  private _lastEmotionSource: 'voice' | 'text' | null = null;
   private _modelAvailable = true;
   private listeners: Set<(state: ThemeEngineState) => void> = new Set();
 
@@ -249,6 +240,7 @@ export class ThemeEngine {
       userTheme: this._userTheme,
       manualMoodOverride: this._manualMoodOverride,
       lastRawPrediction: this._lastRawPrediction,
+      lastEmotionSource: this._lastEmotionSource,
       modelAvailable: this._modelAvailable,
     };
   }
@@ -264,13 +256,14 @@ export class ThemeEngine {
   }
 
   /**
-   * Process a new emotion inference result from the real API.
-   * Applies confidence filtering + temporal smoothing + hysteresis.
-   * Returns true if mood actually changed.
+   * Process a new emotion inference result from the real API (voice or text).
+   * Updates current mood immediately on valid predictions.
+   * Handles low confidence honestly by setting mood to 'uncertain' or 'neutral'.
    */
-  processInference(result: EmotionInferenceResult): boolean {
+  processInference(result: EmotionInferenceResult, source: 'voice' | 'text' = 'text'): boolean {
     this._lastRawPrediction = result;
     this._modelAvailable = true;
+    this._lastEmotionSource = source;
 
     // If mood adaptation is disabled or user has a manual override, skip
     if (!this._moodAdaptationEnabled || this._manualMoodOverride !== null) {
@@ -279,53 +272,29 @@ export class ThemeEngine {
     }
 
     const emotion = this.normalizeEmotion(result.primary_emotion);
-    const confidence = result.confidence;
+    const confidence = result.confidence ?? 0.5;
 
-    // 1. Confidence gate
-    if (confidence < CONFIG.CONFIDENCE_THRESHOLD) {
-      // Low confidence → don't change anything
+    // Honest handling of low confidence (< 0.35) or explicit uncertain/silent audio
+    if (confidence < 0.35 || (result as any).uncertain) {
+      if (this.currentMood !== 'uncertain') {
+        this.currentMood = 'uncertain';
+        this.applyThemeToDOM();
+        this.notifyListeners();
+        return true;
+      }
+      this.notifyListeners();
       return false;
     }
 
-    // 2. Hysteresis: require higher confidence to switch away from current
-    if (emotion !== this.currentMood && confidence < CONFIG.HYSTERESIS_THRESHOLD) {
-      return false;
-    }
-
-    // 3. Record prediction
-    const now = Date.now();
-    this.predictionHistory.push({ emotion, confidence, timestamp: now });
-
-    // Trim old entries
-    const cutoff = now - CONFIG.CONSISTENCY_WINDOW_MS;
-    this.predictionHistory = this.predictionHistory
-      .filter((p) => p.timestamp >= cutoff)
-      .slice(-CONFIG.MAX_HISTORY_SIZE);
-
-    // 4. Check temporal consistency
-    const recentReadings = this.predictionHistory.filter(
-      (p) => p.timestamp >= cutoff && p.emotion === emotion
-    );
-
-    if (recentReadings.length < CONFIG.CONSISTENT_READINGS_REQUIRED) {
-      // Not enough consistent readings yet
-      return false;
-    }
-
-    // 5. Debounce: minimum interval between transitions
-    if (now - this.lastTransitionTime < CONFIG.MIN_TRANSITION_INTERVAL_MS) {
-      return false;
-    }
-
-    // 6. Apply mood change
+    // Direct reactive mood transition when a valid emotion is detected
     if (this.currentMood !== emotion) {
       this.currentMood = emotion;
-      this.lastTransitionTime = now;
       this.applyThemeToDOM();
       this.notifyListeners();
       return true;
     }
 
+    this.notifyListeners();
     return false;
   }
 
@@ -358,7 +327,6 @@ export class ThemeEngine {
     if (!enabled) {
       // Reset to neutral mood display
       this.currentMood = 'neutral';
-      this.predictionHistory = [];
     }
     this.applyThemeToDOM();
     this.persistPreferences();

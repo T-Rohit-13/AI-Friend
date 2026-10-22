@@ -21,6 +21,7 @@ interface NavbarProps {
   onLogout: () => void;
   userMood?: string;
   onOpenSettings?: () => void;
+  onOpenDevPanel?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -41,6 +42,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   userMood = 'neutral',
   onOpenSettings,
+  onOpenDevPanel,
 }) => {
   // UI chrome is strictly English per design requirements
   const t = translations.en;
@@ -106,7 +108,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             transition: 'transform 200ms ease',
           }}
         >
-          🤖
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AI Companion Logo">
+            <circle cx="16" cy="16" r="13" fill="#FFF9F0" />
+            <ellipse cx="11" cy="18" rx="2.5" ry="1.2" fill="#FA9F7A" fillOpacity="0.6" />
+            <ellipse cx="21" cy="18" rx="2.5" ry="1.2" fill="#FA9F7A" fillOpacity="0.6" />
+            <circle cx="12" cy="14" r="1.8" fill="#4A3225" />
+            <circle cx="20" cy="14" r="1.8" fill="#4A3225" />
+            <circle cx="11.5" cy="13.3" r="0.6" fill="#FFFFFF" />
+            <circle cx="19.5" cy="13.3" r="0.6" fill="#FFFFFF" />
+            <path d="M 10 11 Q 12 10.2 14 11" stroke="#6B4A38" strokeWidth="1" strokeLinecap="round" fill="none" />
+            <path d="M 18 11 Q 20 10.2 22 11" stroke="#6B4A38" strokeWidth="1" strokeLinecap="round" fill="none" />
+            <path d="M 13 18.5 Q 16 21.5 19 18.5" stroke="#4A3225" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          </svg>
         </div>
         <div>
           <div
@@ -274,6 +287,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             aria-label={`High contrast mode, current mood ${userMood}`}
           >
             {isHighContrast ? '👁️ Standard' : '👁️ Contrast'}
+          </button>
+        )}
+
+        {/* Developer Testing Panel Button */}
+        {onOpenDevPanel && (
+          <button
+            onClick={onOpenDevPanel}
+            className="btn-ghost"
+            id="dev-lab-open-btn"
+            style={{ padding: '6px 10px', fontSize: '0.8rem', fontWeight: 700, borderRadius: '8px', color: '#9D8DF1' }}
+            title="Open Developer Testing & Diagnostics Lab"
+            aria-label="Open Developer Testing Lab"
+          >
+            🔬 Dev Lab
           </button>
         )}
 

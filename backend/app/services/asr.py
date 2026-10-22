@@ -140,25 +140,22 @@ class GoogleSpeechASRProvider(BaseASRProvider):
         else:
             target_lang = "en-US"
 
-        # Prepare WAV audio buffer
-        wav_stream = None
-        if audio_bytes.startswith(b"RIFF"):
-            wav_stream = io.BytesIO(audio_bytes)
-        else:
-            # Decode audio tensor and repack as clean 16kHz 16-bit mono WAV
-            tensor = decode_wav_to_tensor(audio_bytes)
-            if torch.max(torch.abs(tensor)).item() < 0.005:
-                raise AudioValidationError("Audio recording is silent. Please speak clearly into your microphone.")
+        # Decode audio tensor and verify signal presence
+        tensor = decode_wav_to_tensor(audio_bytes)
+        max_amplitude = torch.max(torch.abs(tensor)).item() if len(tensor) > 0 else 0.0
+        if max_amplitude < 0.005:
+            raise AudioValidationError("Audio recording is silent. Please speak clearly into your microphone.")
 
-            samples = (tensor.clamp(-1.0, 1.0) * 32767.0).to(torch.int16).tolist()
-            buf = io.BytesIO()
-            with wave.open(buf, "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(16000)
-                wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
-            buf.seek(0)
-            wav_stream = buf
+        # Repack as clean 16kHz 16-bit mono WAV for SpeechRecognition AudioFile
+        samples = (tensor.clamp(-1.0, 1.0) * 32767.0).to(torch.int16).tolist()
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+        buf.seek(0)
+        wav_stream = buf
 
         loop = asyncio.get_running_loop()
 

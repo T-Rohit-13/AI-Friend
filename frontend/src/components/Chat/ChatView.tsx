@@ -13,6 +13,41 @@ interface ChatViewProps {
   language: string;
 }
 
+// Mini Animated Companion Portrait for Chat View
+const CompanionMiniAvatar: React.FC<{ size?: number }> = ({ size = 32 }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 32 32"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{ flexShrink: 0, borderRadius: '50%', boxShadow: '0 2px 10px rgba(157, 141, 241, 0.3)' }}
+    aria-label="AI Companion"
+  >
+    <defs>
+      <linearGradient id="miniAvatarBg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#9D8DF1" />
+        <stop offset="100%" stopColor="#78C6F1" />
+      </linearGradient>
+      <linearGradient id="miniFaceBg" x1="0" y1="6" x2="0" y2="28" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#FFF9F0" />
+        <stop offset="100%" stopColor="#FFEAD4" />
+      </linearGradient>
+    </defs>
+    <circle cx="16" cy="16" r="15" fill="url(#miniAvatarBg)" />
+    <circle cx="16" cy="16" r="11.5" fill="url(#miniFaceBg)" />
+    <ellipse cx="11" cy="18" rx="2.2" ry="1.2" fill="#FA9F7A" fillOpacity="0.55" />
+    <ellipse cx="21" cy="18" rx="2.2" ry="1.2" fill="#FA9F7A" fillOpacity="0.55" />
+    <circle cx="12" cy="14" r="1.6" fill="#4A3225" />
+    <circle cx="20" cy="14" r="1.6" fill="#4A3225" />
+    <circle cx="11.5" cy="13.5" r="0.6" fill="#FFFFFF" />
+    <circle cx="19.5" cy="13.5" r="0.6" fill="#FFFFFF" />
+    <path d="M 10 11.2 Q 12 10.4 13.8 11.2" stroke="#6B4A38" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+    <path d="M 18.2 11.2 Q 20 10.4 22 11.2" stroke="#6B4A38" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+    <path d="M 13 18.5 Q 16 21 19 18.5" stroke="#4A3225" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+  </svg>
+);
+
 export const ChatView: React.FC<ChatViewProps> = ({
   messages,
   onSendMessage,
@@ -345,23 +380,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 }}
               >
                 {!isUser && (
-                  <div
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, var(--pastel-lavender), var(--pastel-sky))',
-                      border: '1.5px solid var(--border-subtle)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1rem',
-                      flexShrink: 0,
-                      marginBottom: '2px',
-                      boxShadow: 'var(--shadow-sm)',
-                    }}
-                  >
-                    🤖
+                  <div style={{ flexShrink: 0, marginBottom: '2px' }}>
+                    <CompanionMiniAvatar size={32} />
                   </div>
                 )}
 
@@ -488,7 +508,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               border: '1px solid var(--border-subtle)',
             }}
           >
-            <span style={{ fontSize: '1.1rem' }}>🤖</span>
+            <CompanionMiniAvatar size={22} />
             <span>{t.thinkingState}</span>
             <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--current-emotion-color)', animation: 'robotHover 1.2s infinite' }} />

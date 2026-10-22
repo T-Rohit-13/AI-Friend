@@ -227,42 +227,51 @@ export const api = {
     return currentToken;
   },
 
-  async inferAudioEmotion(audioBlob: Blob): Promise<any> {
-    try {
-      await this.ensureAuthenticated();
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'voice.wav');
-      const res = await fetch(`${API_BASE_URL}/api/v1/emotions/infer-audio`, {
-        method: 'POST',
-        headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
-        body: formData,
-      });
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.warn('Audio emotion inference offline, using heuristic fallback', e);
+  async inferAudioEmotion(audioBlob: Blob): Promise<{
+    primary_emotion: string;
+    confidence: number;
+    distribution: Record<string, number>;
+    acoustic_tone?: string;
+    pitch_mean?: number;
+    rms_energy?: number;
+    uncertain?: boolean;
+  }> {
+    await this.ensureAuthenticated();
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'voice.wav');
+    const res = await fetch(`${API_BASE_URL}/api/v1/emotions/infer-audio`, {
+      method: 'POST',
+      headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Audio emotion inference failed (HTTP ${res.status})`);
     }
-    return { primary_emotion: 'neutral', confidence: 0.7, distribution: { neutral: 0.7 } };
+    return await res.json();
   },
 
-  async transcribeAudio(audioBlob: Blob, language = 'en'): Promise<string> {
-    try {
-      await this.ensureAuthenticated();
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('language', language);
-      const res = await fetch(`${API_BASE_URL}/api/v1/voice/transcribe`, {
-        method: 'POST',
-        headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
-        body: formData,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return data.text || '';
-      }
-    } catch (e) {
-      console.warn('Backend ASR unavailable', e);
+  async transcribeAudio(audioBlob: Blob, language = 'en'): Promise<{
+    text: string;
+    language: string;
+    duration_seconds: number;
+    detected_format?: string;
+    provider?: string;
+  }> {
+    await this.ensureAuthenticated();
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.wav');
+    formData.append('language', language);
+    const res = await fetch(`${API_BASE_URL}/api/v1/voice/transcribe`, {
+      method: 'POST',
+      headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Speech transcription failed (HTTP ${res.status})`);
     }
-    return '';
+    return await res.json();
   },
 
   getTtsAudioUrl(text: string, language = 'en'): string {
