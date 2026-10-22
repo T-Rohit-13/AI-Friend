@@ -1,13 +1,13 @@
 """
 Speech Emotion Recognition Dataset with Speaker-Independent Cross-Validation Splits.
-Supports real dataset directories (RAVDESS/CREMA-D) and synthetic validation samples.
+Supports real dataset directories (RAVDESS/CREMA-D) and multi-tone acoustic samples.
 """
 
 import math
 import random
 import torch
-from torch.utils.data import Dataset, DataLoader
-from typing import List, Tuple, Dict, Optional
+from torch.utils.data import Dataset
+from typing import List, Tuple
 
 from backend.app.ml.emotion_model import EMOTION_CLASSES, NUM_CLASSES
 from backend.app.ml.preprocessing import extract_spectrogram
@@ -17,9 +17,6 @@ class SERDataset(Dataset):
     """PyTorch Dataset for Speech Emotion Recognition."""
 
     def __init__(self, samples: List[Tuple[torch.Tensor, int, str]]):
-        """
-        samples: List of (spectrogram_tensor, class_index, speaker_id)
-        """
         self.samples = samples
 
     def __len__(self) -> int:
@@ -27,41 +24,62 @@ class SERDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         spec, label, _ = self.samples[idx]
-        return spec.unsqueeze(0), label  # (1, Mel_Bins, Time_Frames), label
+        return spec.unsqueeze(0), label
 
 
-def create_synthetic_dataset(num_speakers: int = 12, samples_per_speaker: int = 10) -> List[Tuple[torch.Tensor, int, str]]:
+def create_synthetic_dataset(num_speakers: int = 16, samples_per_speaker: int = 16) -> List[Tuple[torch.Tensor, int, str]]:
     """
-    Creates synthetic acoustic samples partitioned by distinct speaker IDs.
-    Simulates pitch, tempo, and harmonic variation corresponding to emotional prosody.
+    Creates comprehensive acoustic samples partitioned by distinct speaker IDs.
+    Simulates acoustic prosody, pitch, jitter, and frequency modulation for all 8 emotional tones:
+    0: neutral, 1: happy, 2: sad, 3: angry, 4: anxious, 5: calm, 6: surprised, 7: frustrated.
     """
     samples = []
     sample_rate = 16000
 
     for s_idx in range(num_speakers):
         speaker_id = f"speaker_{s_idx+1:02d}"
-        speaker_base_freq = 120.0 + (s_idx * 15.0)  # Distinct fundamental vocal pitch
+        base_f0 = 110.0 + (s_idx * 12.0)  # Distinct baseline pitch
 
         for i in range(samples_per_speaker):
             label = i % NUM_CLASSES
-            duration = 1.0 + (random.random() * 0.5)
+            duration = 1.0 + (random.random() * 0.6)
             t = torch.linspace(0, duration, int(sample_rate * duration))
 
-            # Emotion-specific modulation
-            if label == 1:  # Happy: higher pitch, energetic modulation
-                freq = speaker_base_freq * 1.3
-                modulation = torch.sin(2 * math.pi * 5 * t) * 0.2
-            elif label == 2:  # Sad: lower pitch, slower cadence
-                freq = speaker_base_freq * 0.8
-                modulation = torch.sin(2 * math.pi * 1.5 * t) * 0.1
-            elif label == 3:  # Angry: higher harmonics, abrupt amplitude
-                freq = speaker_base_freq * 1.4
-                modulation = torch.sin(2 * math.pi * 8 * t) * 0.4
-            else:  # Neutral/Calm
-                freq = speaker_base_freq
-                modulation = 0.0
+            # Acoustic prosody modulation based on speech science
+            if label == 1:  # Happy: elevated pitch, rising contour, energetic vibrato
+                freq = base_f0 * 1.35
+                mod = torch.sin(2 * math.pi * 6 * t) * 0.25
+                noise = torch.randn_like(t) * 0.02
+            elif label == 2:  # Sad: depressed pitch, flat contour, soft amplitude
+                freq = base_f0 * 0.8
+                mod = torch.sin(2 * math.pi * 1.2 * t) * 0.08
+                noise = torch.randn_like(t) * 0.01
+            elif label == 3:  # Angry: high fundamental, sharp spectral harmonics, loud bursts
+                freq = base_f0 * 1.5
+                mod = torch.sin(2 * math.pi * 9 * t) * 0.4
+                noise = torch.randn_like(t) * 0.08
+            elif label == 4:  # Anxious: rapid jitter, irregular tremor, elevated F0
+                freq = base_f0 * 1.4 + torch.sin(2 * math.pi * 12 * t) * 20.0
+                mod = torch.sin(2 * math.pi * 14 * t) * 0.3
+                noise = torch.randn_like(t) * 0.05
+            elif label == 5:  # Calm: steady smooth pitch, low breathiness, gentle contour
+                freq = base_f0 * 0.95
+                mod = torch.sin(2 * math.pi * 2 * t) * 0.05
+                noise = torch.zeros_like(t)
+            elif label == 6:  # Surprised: sudden sharp ascending pitch glide
+                freq = base_f0 * (1.1 + 0.6 * (t / duration))
+                mod = torch.sin(2 * math.pi * 7 * t) * 0.3
+                noise = torch.randn_like(t) * 0.03
+            elif label == 7:  # Frustrated: tense vocal tract, harsh harmonics, jagged energy
+                freq = base_f0 * 1.25
+                mod = torch.sin(2 * math.pi * 10 * t) * 0.35 + torch.sin(2 * math.pi * 3 * t) * 0.15
+                noise = torch.randn_like(t) * 0.07
+            else:  # Neutral
+                freq = base_f0
+                mod = 0.0
+                noise = torch.zeros_like(t)
 
-            audio = torch.sin(2 * math.pi * freq * t) + modulation
+            audio = 0.8 * torch.sin(2 * math.pi * freq * t) + mod + noise
             spec = extract_spectrogram(audio)
             samples.append((spec, label, speaker_id))
 
@@ -73,10 +91,6 @@ def get_speaker_independent_splits(
     train_ratio: float = 0.70,
     val_ratio: float = 0.15,
 ) -> Tuple[SERDataset, SERDataset, SERDataset]:
-    """
-    Partitions samples into Train, Validation, and Test datasets based strictly on Speaker ID.
-    Zero speaker overlap guarantees robust generalization to unseen users.
-    """
     all_speakers = sorted(list(set(s[2] for s in samples)))
     random.seed(42)
     shuffled_speakers = all_speakers.copy()

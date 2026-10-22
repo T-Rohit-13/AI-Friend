@@ -19,7 +19,15 @@ export interface ChatTurnResponse {
   language: string;
   audio_url?: string | null;
   companion_emotion: string;
+  user_emotion?: string;
   safety_notice?: SafetyNotice | null;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  display_name: string;
+  preferred_language: string;
 }
 
 export interface ChatMessage {
@@ -77,15 +85,123 @@ const headers = () => {
   return h;
 };
 
+export function extractErrorMessage(errData: any, defaultMsg: string): string {
+  if (!errData) return defaultMsg;
+  if (typeof errData.detail === 'string') return errData.detail;
+  if (Array.isArray(errData.detail)) {
+    return errData.detail
+      .map((item: any) => {
+        if (typeof item === 'string') return item;
+        const loc = item.loc ? item.loc.filter((l: any) => l !== 'body').join(' ') : '';
+        const msg = item.msg || item.message || JSON.stringify(item);
+        return loc ? `${loc}: ${msg}` : msg;
+      })
+      .join('. ');
+  }
+  if (typeof errData.message === 'string') return errData.message;
+  return defaultMsg;
+}
+
 // -------------------------------------------------------------
-// Authentication
+// Authentication & Core Services
 // -------------------------------------------------------------
 export const api = {
-  async ensureAuthenticated() {
-    if (currentToken) return currentToken;
+  async login(email: string, password: string): Promise<{ access_token: string; user: UserProfile; verification_required?: boolean; message?: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, 'Incorrect email or password.'));
+    }
+    setAuthToken(data.access_token);
+    return data;
+  },
+
+  async register(
+    email: string,
+    password: string,
+    displayName: string,
+    preferredLanguage = 'en'
+  ): Promise<{ access_token: string; user: UserProfile; verification_required?: boolean; message?: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        password,
+        display_name: displayName,
+        preferred_language: preferredLanguage,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, 'Registration failed. Email may already be in use.'));
+    }
+    setAuthToken(data.access_token);
+    return data;
+  },
+
+  async verifyEmail(token: string): Promise<{ status: string; message: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/verify-email?token=${encodeURIComponent(token)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, 'Verification failed or link expired.'));
+    }
+    return data;
+  },
+
+  async resendVerification(email: string): Promise<{ status: string; message: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, 'Failed to resend verification email.'));
+    }
+    return data;
+  },
+
+  async getMe(): Promise<UserProfile | null> {
     try {
-      // Auto-register demo guest session if needed
-      const guestEmail = `guest_${Math.random().toString(36).substring(2, 9)}@aifriend.local`;
+      if (!currentToken) return null;
+      const res = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+        headers: headers(),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return null;
+  },
+
+  logout() {
+    currentToken = '';
+    localStorage.removeItem('aifriend_token');
+  },
+
+  async ensureAuthenticated(): Promise<string> {
+    if (currentToken && currentToken !== 'mock_jwt_token_offline') {
+      try {
+        const verifyRes = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${currentToken}` },
+        });
+        if (verifyRes.ok) {
+          return currentToken;
+        }
+      } catch (err) {
+        console.warn('Token verification network issue:', err);
+      }
+      // If token expired or invalid, reset
+      this.logout();
+    }
+
+    try {
+      // Auto-register demo guest session with RFC-compliant public domain for Pydantic EmailStr
+      const randId = Math.random().toString(36).substring(2, 9);
+      const guestEmail = `guest_${randId}@aifriend.org`;
       const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,18 +212,61 @@ export const api = {
           preferred_language: 'en',
         }),
       });
+
       if (res.ok) {
         const data = await res.json();
         setAuthToken(data.access_token);
         return data.access_token;
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.error('Guest registration failed:', res.status, errJson);
       }
-    } catch {
-      // Offline fallback token
-      const mockToken = 'mock_jwt_token_offline';
-      setAuthToken(mockToken);
-      return mockToken;
+    } catch (e) {
+      console.error('Backend connection error during authentication:', e);
+    }
+    return currentToken;
+  },
+
+  async inferAudioEmotion(audioBlob: Blob): Promise<any> {
+    try {
+      await this.ensureAuthenticated();
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice.wav');
+      const res = await fetch(`${API_BASE_URL}/api/v1/emotions/infer-audio`, {
+        method: 'POST',
+        headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+        body: formData,
+      });
+      if (res.ok) return await res.json();
+    } catch (e) {
+      console.warn('Audio emotion inference offline, using heuristic fallback', e);
+    }
+    return { primary_emotion: 'neutral', confidence: 0.7, distribution: { neutral: 0.7 } };
+  },
+
+  async transcribeAudio(audioBlob: Blob, language = 'en'): Promise<string> {
+    try {
+      await this.ensureAuthenticated();
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.wav');
+      formData.append('language', language);
+      const res = await fetch(`${API_BASE_URL}/api/v1/voice/transcribe`, {
+        method: 'POST',
+        headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : {},
+        body: formData,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.text || '';
+      }
+    } catch (e) {
+      console.warn('Backend ASR unavailable', e);
     }
     return '';
+  },
+
+  getTtsAudioUrl(text: string, language = 'en'): string {
+    return `${API_BASE_URL}/api/v1/voice/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
   },
 
   // -------------------------------------------------------------
@@ -116,14 +275,28 @@ export const api = {
   async createSession(title = 'New Conversation', language = 'en', persona = 'friendly_companion') {
     try {
       await this.ensureAuthenticated();
-      const res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
+      let res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({ title, language, persona }),
       });
+
+      // Handle token expiration
+      if (res.status === 401) {
+        this.logout();
+        await this.ensureAuthenticated();
+        res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({ title, language, persona }),
+        });
+      }
+
       if (res.ok) return await res.json();
+      const errJson = await res.json().catch(() => ({}));
+      console.error('Failed to create session on backend:', res.status, errJson);
     } catch (e) {
-      console.warn('Backend unavailable, using local session', e);
+      console.error('Backend unavailable during createSession:', e);
     }
     return {
       id: `local-session-${Date.now()}`,
@@ -140,26 +313,8 @@ export const api = {
     language = 'en',
     detectedEmotion = 'neutral',
   ): Promise<ChatTurnResponse> {
-    try {
-      await this.ensureAuthenticated();
-      const res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({
-          content,
-          mode: 'chat',
-          detected_emotion: detectedEmotion,
-        }),
-      });
-      if (res.ok) return await res.json();
-    } catch (e) {
-      console.warn('Backend unavailable, using client empathy engine', e);
-    }
-
-    // Client-side empathetic fallback
+    // Safety check fallback for crisis detection
     const lower = content.toLowerCase();
-    
-    // Safety check fallback
     if (lower.includes('kill myself') || lower.includes('suicide') || lower.includes('end my life')) {
       return {
         message_id: `msg-${Date.now()}`,
@@ -178,33 +333,72 @@ export const api = {
       };
     }
 
-    // Gentle conversational reply
-    const replies: Record<string, string[]> = {
-      en: [
-        "I'm right here with you. Thank you for opening up. What's taking up the most space in your thoughts right now?",
-        "That sounds like a lot to navigate. Remember to be gentle with yourself today. Would you like to talk more about it, or take a quick mental break with a game?",
-        "It's so wonderful to hear that! What made it stand out the most for you?",
-      ],
-      es: [
-        "Te escucho con atención y estoy aquí contigo. ¿Hay algo en lo que te pueda apoyar hoy?",
-        "Gracias por compartirlo. Respira hondo, lo estás haciendo muy bien. ¿De qué te gustaría hablar?",
-      ],
-      hi: [
-        "मैं हमेशा आपके साथ हूँ। आज का दिन आपके लिए कैसा रहा?",
-        "यह जानकर अच्छा लगा! क्या आप इस बारे में और साझा करना चाहेंगे?",
-      ],
-    };
+    try {
+      await this.ensureAuthenticated();
 
-    const pool = replies[language] || replies.en;
-    const contentReply = pool[Math.floor(Math.random() * pool.length)];
+      // If session is local or missing, create a real backend session first
+      let targetSessionId = sessionId;
+      if (!targetSessionId || targetSessionId.startsWith('local-session-')) {
+        const newSess = await this.createSession('AI Friend Session', language);
+        if (newSess?.id && !newSess.id.startsWith('local-session-')) {
+          targetSessionId = newSess.id;
+        }
+      }
 
-    return {
-      message_id: `msg-${Date.now()}`,
-      role: 'assistant',
-      content: contentReply,
-      language,
-      companion_emotion: 'warm',
-    };
+      let res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${targetSessionId}/messages`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          content,
+          mode: 'chat',
+          detected_emotion: detectedEmotion,
+        }),
+      });
+
+      // Handle 401 Unauthorized (expired token) with one retry
+      if (res.status === 401) {
+        this.logout();
+        await this.ensureAuthenticated();
+        // Also re-create session under new user
+        const newSess = await this.createSession('AI Friend Session', language);
+        targetSessionId = newSess.id;
+        res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${targetSessionId}/messages`, {
+          method: 'POST',
+          headers: headers(),
+          body: JSON.stringify({
+            content,
+            mode: 'chat',
+            detected_emotion: detectedEmotion,
+          }),
+        });
+      }
+
+      if (res.ok) {
+        const turnData = await res.json();
+        return turnData;
+      }
+
+      const errData = await res.json().catch(() => null);
+      const errorMsg = errData?.detail || `Backend returned error ${res.status}: ${res.statusText}`;
+      console.error('Chat API error:', errorMsg);
+
+      return {
+        message_id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `⚠️ **AI Service Notice**: ${errorMsg}`,
+        language,
+        companion_emotion: 'warm',
+      };
+    } catch (e: any) {
+      console.error('Network or backend exception during sendMessage:', e);
+      return {
+        message_id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `⚠️ **Connection Notice**: Unable to reach AI-Friend backend service (${e?.message || 'Network error'}). Please make sure the backend server is running at http://localhost:8000.`,
+        language,
+        companion_emotion: 'warm',
+      };
+    }
   },
 
   // -------------------------------------------------------------

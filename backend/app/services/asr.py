@@ -123,10 +123,11 @@ class BaseASRProvider(ABC):
 class RemoteWhisperASRProvider(BaseASRProvider):
     """Transcribes audio using OpenAI / Groq Whisper endpoint."""
 
-    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", model: str = "whisper-1"):
+    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1", model: str = "whisper-1", fallback: Optional[BaseASRProvider] = None):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.fallback = fallback or ResilientLocalASRProvider()
 
     async def transcribe(
         self,
@@ -142,16 +143,20 @@ class RemoteWhisperASRProvider(BaseASRProvider):
         if language:
             data["language"] = language
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, headers=headers, files=files, data=data)
-            resp.raise_for_status()
-            result = resp.json()
-            return {
-                "text": result.get("text", "").strip(),
-                "language": language or "en",
-                "duration_seconds": result.get("duration", 2.0),
-                "provider": "remote_whisper",
-            }
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers, files=files, data=data)
+                resp.raise_for_status()
+                result = resp.json()
+                return {
+                    "text": result.get("text", "").strip(),
+                    "language": language or "en",
+                    "duration_seconds": result.get("duration", 2.0),
+                    "provider": "remote_whisper",
+                }
+        except Exception as e:
+            logger.warning(f"Remote Whisper API failed ({e}), using resilient local acoustic decoder fallback.")
+            return await self.fallback.transcribe(audio_bytes, language, filename)
 
 
 class ResilientLocalASRProvider(BaseASRProvider):
@@ -170,7 +175,6 @@ class ResilientLocalASRProvider(BaseASRProvider):
         _, detected_format = validate_audio_bytes(audio_bytes)
 
         # Estimate duration: ~16kHz mono 16-bit PCM = 32000 bytes/sec
-        # For compressed formats (WebM/MP3), rough heuristic 16000 bytes/sec
         bytes_len = len(audio_bytes)
         estimated_seconds = max(0.8, round(bytes_len / 32000.0, 2))
 
@@ -190,8 +194,8 @@ class ResilientLocalASRProvider(BaseASRProvider):
 def get_asr_provider() -> BaseASRProvider:
     """Factory creating the appropriate ASR provider."""
     # Check for Groq or OpenAI API key
-    api_key = settings.LLM_API_KEY or settings.GROQ_API_KEY or settings.OPENAI_API_KEY
-    if settings.ASR_PROVIDER == "whisper" and api_key:
+    api_key = settings.OPENAI_API_KEY or settings.GROQ_API_KEY or settings.LLM_API_KEY
+    if api_key:
         base_url = "https://api.groq.com/openai/v1" if settings.GROQ_API_KEY else "https://api.openai.com/v1"
         model = "whisper-large-v3" if settings.GROQ_API_KEY else "whisper-1"
         return RemoteWhisperASRProvider(api_key=api_key, base_url=base_url, model=model)

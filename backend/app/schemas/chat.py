@@ -41,6 +41,7 @@ class ChatTurnResponse(BaseModel):
     language: str = "en"
     audio_url: Optional[str] = None
     companion_emotion: str = "neutral"
+    user_emotion: Optional[str] = "neutral"
     safety_notice: Optional[SafetyNotice] = None
 
 

@@ -32,13 +32,17 @@ class Settings(BaseSettings):
     ]
 
     # AI & LLM Provider Configuration
-    # Supported providers: "mock", "groq", "openai", "anthropic", "gemini", "ollama"
-    LLM_PROVIDER: str = "mock"
+    # Supported providers: "openai" (default), "gemini", "groq", "ollama", "mock"
+    AI_PROVIDER: Optional[str] = None
+    LLM_PROVIDER: str = "openai"
     LLM_API_KEY: Optional[str] = None
     LLM_BASE_URL: Optional[str] = None
-    LLM_MODEL: str = "llama3-70b-8192"
-    GROQ_API_KEY: Optional[str] = None
+    LLM_MODEL: str = "gpt-4o-mini"
     OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GROQ_API_KEY: Optional[str] = None
     MAX_HISTORY_TURNS: int = 10
 
     # Voice / Audio Pipeline
@@ -46,8 +50,19 @@ class Settings(BaseSettings):
     TTS_PROVIDER: str = "web_speech"  # "edge_tts", "kokoro", or "web_speech"
     EMOTION_ENGINE: str = "heuristic"  # "heuristic" or "neural"
 
+    # Email & Account Verification
+    EMAIL_PROVIDER: str = "console"  # "smtp", "console", or "disabled"
+    REQUIRE_EMAIL_VERIFICATION: bool = True
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    EMAIL_FROM: str = "noreply@aifriend.org"
+    FRONTEND_URL: str = "http://localhost:5173"
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

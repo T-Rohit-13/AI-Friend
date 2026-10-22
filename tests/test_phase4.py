@@ -2,14 +2,31 @@ import uuid
 import pytest
 from httpx import AsyncClient, ASGITransport
 from backend.app.main import app
-from backend.app.core.database import init_db
+from backend.app.core.database import init_db, AsyncSessionLocal
 from backend.app.core.rate_limit import rate_limiter
+from backend.app.models.user import User
+from sqlalchemy import select
 
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_db():
     import asyncio
     asyncio.run(init_db())
+
+
+async def register_and_verify(ac: AsyncClient, email: str, password: str = "Password123!", display_name: str = "User") -> str:
+    """Helper registering and verifying test account for authenticated test endpoints."""
+    await ac.post("/api/v1/auth/register", json={
+        "email": email, "password": password, "display_name": display_name
+    })
+    async with AsyncSessionLocal() as session:
+        res = await session.execute(select(User).where(User.email == email))
+        user = res.scalar_one_or_none()
+        if user:
+            user.is_verified = True
+            await session.commit()
+    login = await ac.post("/api/v1/auth/login", json={"email": email, "password": password})
+    return login.json()["access_token"]
 
 
 @pytest.mark.asyncio
@@ -19,20 +36,12 @@ async def test_user_isolation_security():
         uid = uuid.uuid4().hex[:8]
         # Register User A
         email_a = f"user_a_{uid}@example.com"
-        await ac.post("/api/v1/auth/register", json={
-            "email": email_a, "password": "Password123!", "display_name": "User A"
-        })
-        login_a = await ac.post("/api/v1/auth/login", json={"email": email_a, "password": "Password123!"})
-        token_a = login_a.json()["access_token"]
+        token_a = await register_and_verify(ac, email_a, "Password123!", "User A")
         headers_a = {"Authorization": f"Bearer {token_a}"}
 
         # Register User B
         email_b = f"user_b_{uid}@example.com"
-        await ac.post("/api/v1/auth/register", json={
-            "email": email_b, "password": "Password123!", "display_name": "User B"
-        })
-        login_b = await ac.post("/api/v1/auth/login", json={"email": email_b, "password": "Password123!"})
-        token_b = login_b.json()["access_token"]
+        token_b = await register_and_verify(ac, email_b, "Password123!", "User B")
         headers_b = {"Authorization": f"Bearer {token_b}"}
 
         # User A creates a session
@@ -61,12 +70,8 @@ async def test_user_preferences_crud():
     """Verify preference fetching, updating, and persistence."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         email = f"pref_{uuid.uuid4().hex[:8]}@example.com"
-        reg = await ac.post("/api/v1/auth/register", json={
-            "email": email, "password": "Password123!", "display_name": "Pref User"
-        })
-        assert reg.status_code == 201
-        login = await ac.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        token = await register_and_verify(ac, email, "Password123!", "Pref User")
+        headers = {"Authorization": f"Bearer {token}"}
 
         # 1. Fetch default preferences
         get_res = await ac.get("/api/v1/settings/preferences", headers=headers)
@@ -93,11 +98,8 @@ async def test_chat_pagination_and_export():
     """Verify chat session message pagination (limit/offset) and GDPR export."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         email = f"chat_pg_{uuid.uuid4().hex[:8]}@example.com"
-        await ac.post("/api/v1/auth/register", json={
-            "email": email, "password": "Password123!", "display_name": "Pagination User"
-        })
-        login = await ac.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        token = await register_and_verify(ac, email, "Password123!", "Pagination User")
+        headers = {"Authorization": f"Bearer {token}"}
 
         # Create session
         sess_res = await ac.post("/api/v1/chat/sessions", json={"title": "Pagination Chat"}, headers=headers)
@@ -153,12 +155,8 @@ async def test_profile_update_and_password_change():
     """Verify profile updating and password change flow."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         email = f"pwd_{uuid.uuid4().hex[:8]}@example.com"
-        reg = await ac.post("/api/v1/auth/register", json={
-            "email": email, "password": "OldPassword123!", "display_name": "Original Name"
-        })
-        assert reg.status_code == 201
-        login = await ac.post("/api/v1/auth/login", json={"email": email, "password": "OldPassword123!"})
-        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        token = await register_and_verify(ac, email, "OldPassword123!", "Original Name")
+        headers = {"Authorization": f"Bearer {token}"}
 
         # 1. Update Profile
         prof_res = await ac.put("/api/v1/settings/profile", json={"display_name": "Updated Name", "avatar": "star-orb"}, headers=headers)

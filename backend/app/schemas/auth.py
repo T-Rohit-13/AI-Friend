@@ -1,3 +1,4 @@
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
@@ -20,6 +21,7 @@ class UserResponse(BaseModel):
     display_name: str
     preferred_language: str
     avatar: str
+    is_verified: bool = True
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -30,3 +32,15 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: UserResponse
+    verification_required: bool = False
+    message: Optional[str] = None
+
+
+class VerifyEmailResponse(BaseModel):
+    status: str
+    message: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
+

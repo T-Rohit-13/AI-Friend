@@ -64,6 +64,49 @@ async def transcribe_audio(
     )
 
 
+from fastapi.responses import Response
+import urllib.parse
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@router.get("/tts")
+async def get_tts_audio(
+    text: str,
+    language: str = "en",
+    voice: Optional[str] = None,
+):
+    """
+    Synthesizes speech to MP3 stream using edge-tts.
+    Tamil: 'ta-IN-PallaviNeural' or 'ta-IN-ValluvarNeural'
+    English: 'en-US-JennyNeural' or 'en-US-GuyNeural'
+    """
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+
+    voice_name = voice
+    if not voice_name:
+        if language == "ta":
+            voice_name = "ta-IN-PallaviNeural"
+        elif language == "hi":
+            voice_name = "hi-IN-SwaraNeural"
+        else:
+            voice_name = "en-US-JennyNeural"
+
+    try:
+        import edge_tts
+        communicate = edge_tts.Communicate(text, voice_name)
+        audio_stream = bytearray()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_stream.extend(chunk["data"])
+        return Response(content=bytes(audio_stream), media_type="audio/mpeg")
+    except Exception as e:
+        logger.error(f"TTS synthesis error: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
+
+
 @router.post("/synthesize")
 async def synthesize_speech(
     payload: SynthesizeRequest,
@@ -77,12 +120,13 @@ async def synthesize_speech(
         "en": "en-US-JennyNeural",
         "es": "es-ES-ElviraNeural",
         "hi": "hi-IN-SwaraNeural",
-        "ta": "ta-IN-ValluvarNeural",
+        "ta": "ta-IN-PallaviNeural",
         "fr": "fr-FR-DeniseNeural",
         "de": "de-DE-KatjaNeural",
         "ja": "ja-JP-NanamiNeural",
     }
     recommended_voice = voice_mapping.get(payload.language, "en-US-JennyNeural")
+    encoded_text = urllib.parse.quote(payload.text[:300])
 
     return {
         "status": "success",
@@ -91,5 +135,5 @@ async def synthesize_speech(
         "recommended_voice": recommended_voice,
         "rate": payload.rate,
         "pitch": payload.pitch,
-        "audio_stream_url": None,  # Seamlessly uses client Web Speech Synthesis
+        "audio_stream_url": f"/api/v1/voice/tts?text={encoded_text}&language={payload.language}",
     }

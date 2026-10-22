@@ -1,8 +1,11 @@
 from datetime import datetime, timezone
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
+
+logger = logging.getLogger(__name__)
 
 from backend.app.core.database import get_db
 from backend.app.models.user import User
@@ -213,23 +216,44 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # 4. Context Engine Turn Processing
+    # 4. Context Engine Turn Processing & Mood Analysis
     from backend.app.services.context_engine import ContextEngine
+    from backend.app.services.mood_analysis import MoodAnalysisService
+
+    # Analyze user's text emotion/mood and stress level
+    text_analysis = MoodAnalysisService.analyze_text(payload.content)
+    text_emotion = text_analysis.primary_emotion
+
+    active_provider = (getattr(settings, "AI_PROVIDER", None) or getattr(settings, "LLM_PROVIDER", "openai")).lower()
+    active_model = getattr(settings, "GEMINI_MODEL", "") if active_provider == "gemini" else getattr(settings, "OPENAI_MODEL", "")
+    logger.info(
+        f"Chat turn dispatched: session_id={session.id} provider={active_provider} model={active_model} "
+        f"lang={session.language} persona={session.persona} history_count={len(history_list)}"
+    )
 
     turn_result = await ContextEngine.process_turn(
         user_message=payload.content,
         session_id=session.id,
         user_language=session.language,
         persona=session.persona,
-        vocal_emotion=payload.detected_emotion,
-        text_emotion=None,
+        vocal_emotion=payload.detected_emotion if payload.detected_emotion != "neutral" else None,
+        text_emotion=text_emotion,
         memories=memories,
         history=history_list,
     )
 
     reply_content = turn_result["content"]
     companion_emotion = turn_result["companion_emotion"]
+    user_detected_emotion = turn_result.get("detected_emotion", text_emotion)
     safety_notice = turn_result["safety_notice"]
+
+    logger.info(
+        f"Chat turn completed: session_id={session.id} provider={active_provider} "
+        f"reply_len={len(reply_content)} companion_emotion={companion_emotion}"
+    )
+
+    # Update user message detected emotion
+    user_msg.detected_emotion = user_detected_emotion
 
     # 7. Save Assistant Message
     assistant_msg = Message(
@@ -248,6 +272,7 @@ async def send_message(
         content=reply_content,
         language=session.language,
         companion_emotion=companion_emotion,
+        user_emotion=user_detected_emotion,
         safety_notice=safety_notice,
     )
 

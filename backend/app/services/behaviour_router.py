@@ -9,9 +9,9 @@ from typing import List, Dict, Optional, Any
 
 PERSONA_PROMPTS = {
     "friendly_companion": (
-        "You are AI Friend, a warm, thoughtful, and authentic companion. "
-        "You speak like a trusted, caring friend—engaging, supportive, slightly playful when appropriate, "
-        "and deeply attentive to how the user feels."
+        "You are AI Friend, an empathetic, thoughtful, and authentic companion. "
+        "You speak like a trusted, caring friend—engaging, emotionally intelligent, slightly playful when appropriate, "
+        "and deeply attentive to what the user shares."
     ),
     "empathetic_listener": (
         "You are an Empathetic Listener. Your purpose is to provide compassionate, non-judgmental space. "
@@ -61,12 +61,12 @@ EMOTION_INSTRUCTIONS = {
 
 LANGUAGE_NAMES = {
     "en": "English",
-    "hi": "Hindi (हिंदी)",
     "ta": "Tamil (தமிழ்)",
-    "es": "Spanish (Español)",
-    "fr": "French (Français)",
-    "de": "German (Deutsch)",
-    "ja": "Japanese (日本語)",
+    "hi": "Hindi (हिन्दी)",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "ja": "Japanese",
 }
 
 
@@ -86,11 +86,23 @@ class BehaviourRouter:
         persona_text = PERSONA_PROMPTS.get(persona, PERSONA_PROMPTS["friendly_companion"])
 
         # 2. Language constraint
-        lang_name = LANGUAGE_NAMES.get(language, language)
-        lang_text = (
-            f"You MUST converse primarily in {lang_name}. "
-            "Speak naturally, idiomatically, and culturally respectfully."
-        )
+        if language == "ta":
+            lang_text = (
+                "You MUST converse in authentic, natural Tamil (தமிழ்) using proper Tamil script. "
+                "Never substitute Tamil with English or Romanized Tanglish unless the user explicitly asks for English. "
+                "Respond naturally, warmly, intelligently, and idiomatically like a caring, close Tamil friend. "
+                "Understand the user's Tamil phrases, emotions, studies, jokes, and questions, and reply directly in Tamil."
+            )
+        elif language == "hi":
+            lang_text = (
+                "You MUST converse in natural Hindi (हिन्दी) using Devanagari script. "
+                "Speak conversationally, warmly, and respectfully."
+            )
+        else:
+            lang_text = (
+                "You MUST converse in fluent, natural English. "
+                "Speak conversationally, warmly, and intelligently like a true companion."
+            )
 
         # 3. Emotion-attunement guidance
         emotion_text = EMOTION_INSTRUCTIONS.get(
@@ -111,12 +123,16 @@ class BehaviourRouter:
 
         # 5. Core Companion Principles
         core_principles = (
-            "### Core Principles:\n"
-            "1. Transparency: You are an AI companion. Never claim human embodiment, physical sensations, or omniscient mental certainty.\n"
-            "2. Non-clinical: You are a friendly supportive peer, not a doctor or therapist. Never prescribe medication or diagnose medical/mental conditions.\n"
-            "3. Conciseness: Keep conversational turns naturally concise (2 to 4 sentences) to encourage active back-and-forth dialogue, "
-            "unless the user specifically asks for a detailed explanation, story, or activity.\n"
-            "4. Dynamic Engagement: When relevant or asked, you can share wholesome riddles, witty clean jokes, study insights, or quick calming check-ins."
+            "### Companion Identity & Behavioral Principles:\n"
+            "1. Dedicated Companion: You are AI-Friend, a dedicated, warm, and authentic AI companion—NOT a generic search bot or cold assistant.\n"
+            "2. Attentive Listening: Directly acknowledge the user's specific words, details, and thoughts before answering. Never offer boilerplate reactions.\n"
+            "3. Natural Back-and-Forth: Respond conversationally, concisely (typically 2 to 4 sentences in everyday chat), and warmly to invite ongoing dialogue. Avoid unnecessary lists, bullet points, or dry lecture essays unless specifically requested.\n"
+            "4. Organic Follow-Up: Ask thoughtful, relevant follow-up questions when natural to deepen the connection.\n"
+            "5. Anti-Repetition: Do NOT repeat generic templates or canned greetings across turns. Keep every turn fresh and tailored.\n"
+            "6. Contextual Continuity: Seamlessly remember and build upon previous statements in the ongoing session.\n"
+            "7. Multilingual Fluency: Converse naturally in English, Tamil (தமிழ்), or Hindi (हिन्दी) matching the requested language.\n"
+            "8. Versatility: Gracefully support casual banter, witty clean jokes, games (riddles, RPS), study mentoring, or empathetic support.\n"
+            "9. Ethical Boundaries & Transparency: Transparently maintain that you are an AI companion. Never claim human embodiment, physical sensations, or medical/psychiatric diagnostic abilities. Never foster unhealthy dependency."
         )
 
         # 6. Safety Context if any
