@@ -140,7 +140,7 @@ async def test_safety_and_parasocial_boundary_audit():
         c_data = crisis_res.json()
         assert c_data["safety_notice"] is not None
         assert c_data["safety_notice"]["is_crisis"] is True
-        assert "988" in c_data["content"]
+        assert "parent" in c_data["content"].lower() or "sms" in c_data["content"].lower()
         assert c_data["companion_emotion"] == "compassionate"
 
         # Parasocial Boundary Check

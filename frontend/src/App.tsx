@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navigation/Navbar';
 import type { AppMode } from './components/Navigation/Navbar';
-import { EmotionalAvatar } from './components/Avatar/EmotionalAvatar';
 import type { CompanionState, AvatarExpression } from './components/Avatar/EmotionalAvatar';
 import { DevTestingPanel } from './components/Dev/DevTestingPanel';
 import { ChatView } from './components/Chat/ChatView';
@@ -11,12 +10,17 @@ import { StudyView } from './components/Study/StudyView';
 import { MemoryVaultView } from './components/Memory/MemoryVaultView';
 import { AuthModal } from './components/Auth/AuthModal';
 import { SettingsPanel } from './components/Navigation/SettingsPanel';
+import { AiSettingsModal } from './components/Navigation/AiSettingsModal';
 import { MoodActivities } from './components/Navigation/MoodActivities';
+import { LeftSidebar } from './components/Navigation/LeftSidebar';
+import { MoodHistoryModal } from './components/Chat/MoodHistoryModal';
+
 import { api } from './services/api';
 import type { ChatMessage, UserProfile } from './services/api';
 import { getThemeEngine } from './services/themeEngine';
 import type { ThemeEngineState } from './services/themeEngine';
 import { getSavedLanguage, saveLanguage } from './services/i18n';
+import { getAvatarPreferences, saveAvatarPreferences, getRecommendedVoice } from './services/avatarPreferences';
 
 export function App() {
   const [currentMode, setCurrentMode] = useState<AppMode>('chat');
@@ -29,6 +33,26 @@ export function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
+  const [isMoodHistoryOpen, setIsMoodHistoryOpen] = useState(false);
+  const [conversationMode, setConversationMode] = useState<'normal' | 'dump'>(
+    () => getAvatarPreferences().conversationMode || 'normal'
+  );
+  const [isAiSettingsOpen, setIsAiSettingsOpen] = useState(false);
+  const [companionName, setCompanionName] = useState<string>(() => getAvatarPreferences().companionName || 'AI Friend');
+
+  // Synchronize companion preferences whenever updated in AiSettingsModal
+  useEffect(() => {
+    const handlePrefChange = (e: any) => {
+      if (e.detail?.companionName) {
+        setCompanionName(e.detail.companionName);
+      }
+      if (e.detail?.conversationMode) {
+        setConversationMode(e.detail.conversationMode);
+      }
+    };
+    window.addEventListener('ai_friend_avatar_prefs_changed', handlePrefChange);
+    return () => window.removeEventListener('ai_friend_avatar_prefs_changed', handlePrefChange);
+  }, []);
   const [currentlySpeakingMsgId, setCurrentlySpeakingMsgId] = useState<string | null>(null);
   const [audioLoadingMsgId, setAudioLoadingMsgId] = useState<string | null>(null);
   const [ttsNotice, setTtsNotice] = useState<string | null>(null);
@@ -41,12 +65,13 @@ export function App() {
   // Settings & Dev Panel State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDevPanelOpen, setIsDevPanelOpen] = useState(false);
-  const [autoMoodEnabled, setAutoMoodEnabled] = useState(true);
   const [manualOverrideEmotion, setManualOverrideEmotion] = useState<AvatarExpression | null>(null);
 
   // Theme Engine Integration
   const themeEngine = getThemeEngine();
   const [themeState, setThemeState] = useState<ThemeEngineState>(themeEngine.getState());
+
+  const effectiveEmotion = manualOverrideEmotion || (themeState.activeMood !== 'neutral' ? themeState.activeMood : companionEmotion);
 
   const isSpeakingRef = useRef(false);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -73,11 +98,36 @@ export function App() {
     }
   }, [isHighContrast]);
 
+  // Automatically open AI Settings modal if ai-settings mode is selected
+  useEffect(() => {
+    if (currentMode === 'ai-settings') {
+      setIsAiSettingsOpen(true);
+    }
+  }, [currentMode]);
+
+
+
   // Check current user session on mount
   useEffect(() => {
     const fetchUser = async () => {
       const u = await api.getMe();
-      if (u) setUser(u);
+      if (u) {
+        setUser(u);
+        const remotePrefs = await api.getPreferences();
+        if (remotePrefs) {
+          saveAvatarPreferences({
+            companionName: remotePrefs.companion_name || undefined,
+            style: 'emoji',
+            gender: remotePrefs.avatar_gender === 'male' ? 'male' : 'female',
+            autoMoodEnabled: remotePrefs.auto_expression_updates !== false,
+            gentleAcknowledgements: remotePrefs.gentle_acknowledgements !== false,
+            avatarMoodOverride: remotePrefs.avatar_mood_override || 'auto',
+            voiceId: remotePrefs.voice_id || undefined,
+            emotionSharingOptIn: remotePrefs.emotion_sharing_opt_in !== false,
+            privacyStrictMode: Boolean(remotePrefs.privacy_strict_mode),
+          });
+        }
+      }
     };
     fetchUser();
   }, []);
@@ -129,11 +179,11 @@ export function App() {
   // Create initial chat session
   useEffect(() => {
     const initSession = async () => {
-      const sess = await api.createSession('AI Friend Session', language, persona);
+      const sess = await api.createSession('AI Friend Session', language, persona, conversationMode);
       setSessionId(sess.id);
     };
     initSession();
-  }, [language, persona]);
+  }, [language, persona, conversationMode]);
 
   // Check for email verification token in URL params on mount
   useEffect(() => {
@@ -237,11 +287,22 @@ export function App() {
       utterance.rate = 0.95;
       utterance.pitch = 1.05;
 
+      const avatarPrefs = getAvatarPreferences();
       const voices = window.speechSynthesis.getVoices();
-      const matchedVoice =
-        voices.find((v) => (v.name.includes('Natural') || v.name.includes('Online')) && v.lang.startsWith('en')) ||
-        voices.find((v) => v.lang === 'en-US' || v.lang.startsWith('en')) ||
-        null;
+      let matchedVoice = null;
+
+      if (avatarPrefs.voiceId?.includes('Guy') || avatarPrefs.gender === 'male') {
+        matchedVoice =
+          voices.find((v) => (v.name.toLowerCase().includes('guy') || v.name.toLowerCase().includes('david') || v.name.toLowerCase().includes('male')) && v.lang.startsWith('en')) ||
+          voices.find((v) => v.lang === 'en-US' || v.lang.startsWith('en')) ||
+          null;
+      } else {
+        matchedVoice =
+          voices.find((v) => (v.name.toLowerCase().includes('jenny') || v.name.toLowerCase().includes('zira') || v.name.toLowerCase().includes('female')) && v.lang.startsWith('en')) ||
+          voices.find((v) => (v.name.includes('Natural') || v.name.includes('Online')) && v.lang.startsWith('en')) ||
+          voices.find((v) => v.lang === 'en-US' || v.lang.startsWith('en')) ||
+          null;
+      }
 
       if (matchedVoice) utterance.voice = matchedVoice;
 
@@ -274,9 +335,12 @@ export function App() {
       if (msgId) setAudioLoadingMsgId(msgId);
       setCompanionState('speaking');
 
+      const avatarPrefs = getAvatarPreferences();
+      const recommendedVoice = getRecommendedVoice(avatarPrefs.gender, 'ta-IN', avatarPrefs.voiceId);
+
       const streamUrl = directAudioUrl
         ? (directAudioUrl.startsWith('http') ? directAudioUrl : `${api.getBaseUrl()}${directAudioUrl}`)
-        : api.getTtsAudioUrl(text, 'ta-IN');
+        : api.getTtsAudioUrl(text, 'ta-IN', recommendedVoice);
 
       const audio = new Audio(streamUrl);
       audioPlayerRef.current = audio;
@@ -339,20 +403,48 @@ export function App() {
 
     try {
       const vocalSignal = voiceEmotion || 'neutral';
-      const turn = await api.sendMessage(sessionId, text, language, vocalSignal);
+      const turn = await api.sendMessage(sessionId, text, language, vocalSignal, conversationMode);
 
-      const companionReply: ChatMessage = {
-        id: turn.message_id,
-        role: 'assistant',
-        content: turn.content,
-        audio_url: turn.audio_url,
-        companion_emotion: turn.companion_emotion,
-        detected_emotion: turn.user_emotion,
-        safety_notice: turn.safety_notice,
-        created_at: new Date().toISOString(),
-      };
+      // In Dump Mode, if response is empty (gentle acknowledgements disabled), do not add assistant message
+      if (turn.content && turn.content.trim()) {
+        const companionReply: ChatMessage = {
+          id: turn.message_id,
+          role: 'assistant',
+          content: turn.content,
+          audio_url: turn.audio_url,
+          companion_emotion: turn.companion_emotion,
+          detected_emotion: turn.user_emotion,
+          safety_notice: turn.safety_notice,
+          created_at: new Date().toISOString(),
+        };
 
-      setMessages((prev) => [...prev, companionReply]);
+        setMessages((prev) => [...prev, companionReply]);
+
+        // Speak reply if not in crisis
+        if (!turn.safety_notice?.is_crisis) {
+          const isTurnTamil =
+            turn.language === 'ta' ||
+            turn.language.startsWith('ta') ||
+            /[\u0B80-\u0BFF]/.test(turn.content);
+          speakText(
+            turn.content,
+            turn.message_id,
+            isTurnTamil ? 'ta-IN' : 'en-US',
+            turn.audio_url
+          );
+        } else {
+          setCompanionState('idle');
+        }
+      } else {
+        setCompanionState('idle');
+      }
+
+      // Check for intent-based navigation to games
+      if (turn.navigation_intent === 'games') {
+        setTimeout(() => {
+          setCurrentMode('games');
+        }, 1600);
+      }
 
       // Automatically sync conversation language if Tamil or English was requested
       const isTurnTamil =
@@ -386,18 +478,6 @@ export function App() {
       if (turn.companion_emotion) {
         setCompanionEmotion(turn.companion_emotion);
       }
-
-      // Speak reply if not in crisis
-      if (!turn.safety_notice?.is_crisis) {
-        speakText(
-          turn.content,
-          turn.message_id,
-          isTurnTamil ? 'ta-IN' : 'en-US',
-          turn.audio_url
-        );
-      } else {
-        setCompanionState('idle');
-      }
     } catch (err) {
       console.error('Failed to send message:', err);
       setCompanionState('idle');
@@ -406,6 +486,17 @@ export function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleToggleConversationMode = (mode: 'normal' | 'dump') => {
+    setConversationMode(mode);
+    saveAvatarPreferences({ conversationMode: mode });
+  };
+
+  const handleSelectHistorySession = (sessId: string, historyMsgs: ChatMessage[], _title: string) => {
+    setSessionId(sessId);
+    setMessages(historyMsgs);
+    setCurrentMode('chat');
   };
 
   const handleLogout = () => {
@@ -421,7 +512,7 @@ export function App() {
   const isTamil = language === 'ta' || language.startsWith('ta');
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100vh', maxHeight: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* a11y Skip Link */}
       <a href="#main-content" className="skip-to-content">
         Skip to main content (Alt+1 for Chat)
@@ -459,7 +550,9 @@ export function App() {
         onLogout={handleLogout}
         userMood={themeState.activeMood}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenAiSettings={() => setIsAiSettingsOpen(true)}
         onOpenDevPanel={() => setIsDevPanelOpen(true)}
+        companionName={companionName}
       />
 
       {/* Email Verification Status Banner if present */}
@@ -497,42 +590,40 @@ export function App() {
         </div>
       )}
 
-      {/* Hero Emotional State / Ambient Mood Status Banner */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 16px 8px' }}>
-        <EmotionalAvatar
-          emotion={themeState.activeMood !== 'neutral' ? themeState.activeMood : companionEmotion}
-          state={companionState}
-          personaName={persona === 'friendly_companion' ? 'AI Friend' : persona.replace('_', ' ')}
-          size={115}
-          autoMoodEnabled={autoMoodEnabled}
-          manualOverrideEmotion={manualOverrideEmotion}
-          onToggleAutoMood={() => setAutoMoodEnabled((prev) => !prev)}
-          onSetOverrideEmotion={(emo) => setManualOverrideEmotion(emo)}
-          showControls={true}
-        />
-
+      {/* Ambient Mood Status Banner & Adaptive Suggestions (Visible on all zoom levels) */}
+      <div
+        className="app-mood-accessory-bar"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+          padding: '2px 16px 6px',
+          flexWrap: 'wrap',
+          flexShrink: 0,
+        }}
+      >
         {/* Dynamic Mood & Theme Pill */}
         <div
           style={{
-            marginTop: '10px',
-            padding: '6px 18px',
+            padding: '5px 16px',
             borderRadius: '999px',
             background: 'var(--bg-surface-elevated)',
             border: '1px solid var(--border-subtle)',
             boxShadow: 'var(--shadow-sm)',
-            fontSize: '0.82rem',
+            fontSize: '0.8rem',
             fontWeight: 600,
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
             transition: 'all 0.5s ease',
             backdropFilter: 'blur(16px)',
           }}
         >
           <span
             style={{
-              width: 9,
-              height: 9,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
               background: 'var(--current-emotion-color)',
               boxShadow: '0 0 10px var(--current-emotion-color)',
@@ -554,7 +645,7 @@ export function App() {
           <span
             style={{
               color: 'var(--text-secondary)',
-              fontSize: '0.78rem',
+              fontSize: '0.76rem',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -592,10 +683,8 @@ export function App() {
             )}
           </span>
         </div>
-      </div>
 
-      {/* Mood-Adaptive Activity Suggestions */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 16px 8px' }}>
+        {/* Mood-Adaptive Activity Suggestions */}
         <MoodActivities
           onSelectMode={(mode) => setCurrentMode(mode as AppMode)}
           onSendMessage={handleSendMessage}
@@ -641,59 +730,60 @@ export function App() {
         </div>
       )}
 
-      {/* Main Content Viewport */}
-      <main
-        id="main-content"
-        role="main"
-        tabIndex={-1}
+      {/* Main Container: Left Navigation Sidebar + Viewport */}
+      <div
         style={{
-          flex: 1,
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '0 16px 24px',
+          flex: 1,
+          alignItems: 'stretch',
+          justifyContent: 'center',
           width: '100%',
-          maxWidth: '980px',
+          maxWidth: '1440px',
           margin: '0 auto',
+          padding: '4px 16px 6px',
+          gap: '12px',
+          minHeight: 0,
+          overflow: 'hidden',
         }}
       >
-        {currentMode === 'chat' && (
-          <div className="glass-panel" style={{ width: '100%', overflow: 'hidden', borderRadius: '20px' }}>
-            <ChatView
-              messages={messages}
-              onSendMessage={handleSendMessage}
-              isLoading={isLoading}
-              onSpeakMessage={(content, mId, audioUrl) => {
-                const hasTamil = /[\u0B80-\u0BFF]/.test(content);
-                speakText(content, mId, hasTamil ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'), audioUrl);
-              }}
-              onStopSpeaking={stopSpeaking}
-              currentlySpeakingMsgId={currentlySpeakingMsgId}
-              audioLoadingMsgId={audioLoadingMsgId}
-              language={language}
-            />
-          </div>
-        )}
+        <LeftSidebar
+          currentMode={currentMode}
+          onSelectMode={setCurrentMode}
+          language={language}
+          onLanguageChange={(l) => {
+            const lang = (l === 'ta' ? 'ta' : 'en') as 'en' | 'ta';
+            setLanguage(lang);
+            saveLanguage(lang);
+          }}
+          currentMood={themeState.activeMood}
+          moodLabel={themeState.activeTokens.label}
+          onOpenMoodSelector={() => setIsSettingsOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenAiSettings={() => setIsAiSettingsOpen(true)}
+          onOpenMoodHistory={() => setIsMoodHistoryOpen(true)}
+          companionName={companionName}
+        />
 
-        {currentMode === 'voice' && (
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '20px',
-              alignItems: 'center',
-            }}
-          >
-            <VoiceControls
-              onTranscript={handleSendMessage}
-              isListening={companionState === 'listening'}
-              setIsListening={(val) => setCompanionState(val ? 'listening' : 'idle')}
-              language={language}
-              isSpeaking={companionState === 'speaking'}
-              onInterruptSpeech={stopSpeaking}
-            />
-            <div className="glass-panel" style={{ width: '100%', maxHeight: '360px', overflow: 'hidden', borderRadius: '20px' }}>
+        {/* Main Content Viewport */}
+        <main
+          id="main-content"
+          role="main"
+          tabIndex={-1}
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            padding: 0,
+            width: '100%',
+            minWidth: 0,
+            minHeight: 0,
+            height: '100%',
+            overflow: 'hidden',
+          }}
+        >
+          {currentMode === 'chat' && (
+            <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', flex: 1, overflow: 'hidden' }}>
               <ChatView
                 messages={messages}
                 onSendMessage={handleSendMessage}
@@ -706,23 +796,154 @@ export function App() {
                 currentlySpeakingMsgId={currentlySpeakingMsgId}
                 audioLoadingMsgId={audioLoadingMsgId}
                 language={language}
+                companionEmotion={effectiveEmotion}
+                companionState={companionState}
+                personaName={persona === 'friendly_companion' ? companionName : persona.replace('_', ' ')}
+                companionName={companionName}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onOpenAiSettings={() => setIsAiSettingsOpen(true)}
+                moodLabel={themeState.activeTokens.label}
+                conversationMode={conversationMode}
+                onToggleConversationMode={handleToggleConversationMode}
+                onNavigateTab={(tab) => setCurrentMode(tab as AppMode)}
               />
             </div>
-          </div>
-        )}
+          )}
 
-        {currentMode === 'games' && (
-          <GamesView
-            language={language}
-            onSpeak={speakText}
-            userMood={themeState.activeMood}
-          />
-        )}
+          {currentMode === 'voice' && (
+            <div
+              style={{
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                alignItems: 'center',
+              }}
+            >
+              <VoiceControls
+                onTranscript={handleSendMessage}
+                isListening={companionState === 'listening'}
+                setIsListening={(val) => setCompanionState(val ? 'listening' : 'idle')}
+                language={language}
+                isSpeaking={companionState === 'speaking'}
+                onInterruptSpeech={stopSpeaking}
+                companionEmotion={effectiveEmotion}
+                onEndCall={() => setCurrentMode('chat')}
+                isMuted={isMuted}
+                onToggleMute={() => setIsMuted((prev) => !prev)}
+              />
+              <div className="glass-panel" style={{ width: '100%', maxHeight: '360px', overflow: 'hidden', borderRadius: '20px' }}>
+                <ChatView
+                  messages={messages}
+                  onSendMessage={handleSendMessage}
+                  isLoading={isLoading}
+                  onSpeakMessage={(content, mId, audioUrl) => {
+                    const hasTamil = /[\u0B80-\u0BFF]/.test(content);
+                    speakText(content, mId, hasTamil ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'), audioUrl);
+                  }}
+                  onStopSpeaking={stopSpeaking}
+                  currentlySpeakingMsgId={currentlySpeakingMsgId}
+                  audioLoadingMsgId={audioLoadingMsgId}
+                  language={language}
+                  companionEmotion={effectiveEmotion}
+                  companionState={companionState}
+                  personaName={persona === 'friendly_companion' ? companionName : persona.replace('_', ' ')}
+                  companionName={companionName}
+                  onOpenSettings={() => setIsSettingsOpen(true)}
+                  onOpenAiSettings={() => setIsAiSettingsOpen(true)}
+                  moodLabel={themeState.activeTokens.label}
+                  conversationMode={conversationMode}
+                  onToggleConversationMode={handleToggleConversationMode}
+                  onNavigateTab={(tab) => setCurrentMode(tab as AppMode)}
+                />
+              </div>
+            </div>
+          )}
 
-        {currentMode === 'study' && <StudyView />}
+          {currentMode === 'games' && (
+            <div style={{ width: '100%', height: '100%', minHeight: 0, overflowY: 'auto' }}>
+              <GamesView
+                language={language}
+                onSpeak={(text) => {
+                  const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+                  speakText(text, undefined, hasTamil ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'));
+                }}
+                userMood={themeState.activeMood}
+              />
+            </div>
+          )}
 
-        {currentMode === 'memories' && <MemoryVaultView />}
-      </main>
+          {currentMode === 'study' && (
+            <div style={{ width: '100%', height: '100%', minHeight: 0, overflowY: 'auto' }}>
+              <StudyView
+                language={language}
+                onSpeak={(text) => {
+                  const hasTamil = /[\u0B80-\u0BFF]/.test(text);
+                  speakText(text, undefined, hasTamil ? 'ta-IN' : (language === 'ta' ? 'ta-IN' : 'en-US'));
+                }}
+              />
+            </div>
+          )}
+
+          {currentMode === 'memories' && (
+            <div style={{ width: '100%', height: '100%', minHeight: 0, overflowY: 'auto' }}>
+              <MemoryVaultView />
+            </div>
+          )}
+
+          {currentMode === 'ai-settings' && (
+            <div style={{ width: '100%', height: '100%', minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+              <div className="glass-panel" style={{ padding: '36px', borderRadius: '24px', textAlign: 'center', maxWidth: '480px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '3.2rem', marginBottom: '14px' }}>✨</div>
+                <h2 style={{ margin: '0 0 10px', fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {isTamil ? 'AI தோழன் அமைப்புகள்' : 'AI Companion Settings'}
+                </h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: '22px' }}>
+                  {isTamil
+                    ? 'உங்கள் AI தோழனின் பெயர், 3D அவதார், பாலினம், குரல் மற்றும் தனியுரிமை அமைப்புகளைத் தனிப்பயனாக்குங்கள்.'
+                    : 'Configure your companion name, 3D avatar vs animated emoji, gender, neural voice model, and emotional response sensitivity.'}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                  <button
+                    onClick={() => setIsAiSettingsOpen(true)}
+                    className="btn-primary"
+                    style={{ padding: '11px 24px', borderRadius: '14px', fontSize: '0.9rem' }}
+                  >
+                    ✨ {isTamil ? 'அமைப்புகளைத் திற' : 'Open AI Settings'}
+                  </button>
+                  <button
+                    onClick={() => setCurrentMode('chat')}
+                    className="btn-ghost"
+                    style={{ padding: '11px 20px', borderRadius: '14px', fontSize: '0.9rem' }}
+                  >
+                    💬 {isTamil ? 'உரையாடலுக்குத் திரும்பு' : 'Back to Chat'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+
+      {/* Chat History Grouped by Mood Modal */}
+      <MoodHistoryModal
+        isOpen={isMoodHistoryOpen}
+        onClose={() => setIsMoodHistoryOpen(false)}
+        onSelectSession={handleSelectHistorySession}
+        language={language}
+      />
+
+      {/* AI Settings Modal (Companion, 3D Avatar, Voice & Personality) */}
+      <AiSettingsModal
+        isOpen={isAiSettingsOpen}
+        onClose={() => {
+          setIsAiSettingsOpen(false);
+          if (currentMode === 'ai-settings') {
+            setCurrentMode('chat');
+          }
+        }}
+        language={language}
+      />
 
       {/* Settings Panel (Slide-out) */}
       <SettingsPanel
@@ -753,11 +974,12 @@ export function App() {
       <footer
         style={{
           textAlign: 'center',
-          padding: '14px 20px',
-          fontSize: '0.75rem',
+          padding: '3px 14px',
+          fontSize: '0.68rem',
           color: 'var(--text-muted)',
           borderTop: '1px solid var(--border-subtle)',
-          background: 'rgba(0, 0, 0, 0.2)',
+          background: 'var(--bg-surface)',
+          flexShrink: 0,
         }}
         role="contentinfo"
       >

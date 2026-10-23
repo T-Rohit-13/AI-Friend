@@ -54,3 +54,40 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        
+        # SQLite schema auto-patch for new columns
+        def patch_sqlite_columns(connection):
+            from sqlalchemy import text
+            tables_and_columns = {
+                "users": [
+                    ("phone_number", "VARCHAR(30)"),
+                    ("parent_phone_number", "VARCHAR(30)"),
+                    ("otp_code_hash", "VARCHAR(128)"),
+                    ("otp_expires_at", "DATETIME"),
+                    ("otp_attempts", "INTEGER DEFAULT 0"),
+                    ("otp_last_sent_at", "DATETIME"),
+                ],
+                "chat_sessions": [
+                    ("mode", "VARCHAR(20) DEFAULT 'normal'"),
+                    ("dominant_mood", "VARCHAR(30) DEFAULT 'neutral'"),
+                ],
+                "user_preferences": [
+                    ("companion_name", "VARCHAR(50) DEFAULT 'AI-Friend'"),
+                    ("avatar_style", "VARCHAR(20) DEFAULT 'emoji'"),
+                    ("avatar_gender", "VARCHAR(20) DEFAULT 'female'"),
+                    ("auto_expression_updates", "BOOLEAN DEFAULT 1"),
+                    ("gentle_acknowledgements", "BOOLEAN DEFAULT 1"),
+                    ("avatar_mood_override", "VARCHAR(30) DEFAULT 'auto'"),
+                ],
+            }
+            for table, cols in tables_and_columns.items():
+                try:
+                    res = connection.execute(text(f"PRAGMA table_info({table})")).fetchall()
+                    existing_cols = {row[1] for row in res}
+                    for col_name, col_type in cols:
+                        if col_name not in existing_cols:
+                            connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}"))
+                except Exception:
+                    pass
+
+        await conn.run_sync(patch_sqlite_columns)

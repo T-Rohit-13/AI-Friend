@@ -58,16 +58,19 @@ async def test_auth_registration_and_login():
 @pytest.mark.asyncio
 async def test_safety_crisis_trigger():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        import uuid
         # Register a temporary user
-        email = "crisis_test@example.com"
-        await ac.post("/api/v1/auth/register", json={
+        email = f"crisis_{uuid.uuid4().hex[:8]}@example.com"
+        reg = await ac.post("/api/v1/auth/register", json={
             "email": email,
             "password": "Password123!",
             "display_name": "Crisis Test",
-            "preferred_language": "en"
+            "preferred_language": "en",
+            "phone_number": "9123456780",
+            "parent_phone_number": "9876543210",
         })
-        login = await ac.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
-        token = login.json()["access_token"]
+        assert reg.status_code == 201
+        token = reg.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create session
@@ -84,8 +87,8 @@ async def test_safety_crisis_trigger():
         body = chat_res.json()
         assert body["safety_notice"] is not None
         assert body["safety_notice"]["is_crisis"] is True
-        assert "988" in body["safety_notice"]["crisis_helpline"]
-        assert "988" in body["content"]
+        assert body["safety_notice"]["parent_alert_sent"] is True
+        assert "SMS" in body["content"] or "parent" in body["content"]
 
 
 @pytest.mark.asyncio

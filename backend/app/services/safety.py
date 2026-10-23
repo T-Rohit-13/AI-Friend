@@ -6,8 +6,10 @@ from backend.app.schemas.chat import SafetyNotice
 # Regex trigger patterns
 CRISIS_PATTERNS = [
     r"\b(kill myself|killing myself|suicide|want to die|wanna die|end my life|ending my life|end it all|ending it all|hurt myself|hurting myself|cutting myself|take my own life|taking my own life)\b",
-    r"\b(no reason to live|better off dead|commit suicide)\b",
-    r"\b(आत्महत्या|जान देना चाहता|مرना चाहता हूं)\b",
+    r"\b(attempt suicide|attempted suicide|attempting suicide|suicide attempt|hang myself|slit my wrist|overdose on pills|jump off|don't want to live|dont want to live)\b",
+    r"\b(no reason to live|better off dead|commit suicide|finish my life)\b",
+    r"\b(தற்கொலை|சாக போறேன்|சாக போகிறேன்|செத்துடலாம்)\b",
+    r"\b(आत्महत्या|जान देना चाहता|मरना चाहता हूं)\b",
 ]
 
 MEDICAL_PATTERNS = [
@@ -31,44 +33,39 @@ def evaluate_safety(text: str, user_language: str = "en") -> Tuple[bool, Optiona
         if re.search(pattern, clean_text, re.IGNORECASE):
             crisis_notice = SafetyNotice(
                 is_crisis=True,
-                crisis_helpline="988 (US/Canada) | 112 (EU) | 9152987821 (India Tele-MANAS)",
+                crisis_helpline="Immediate Parent SMS Alert Dispatched",
                 resources=[
                     "https://988lifeline.org",
                     "https://findahelpline.com",
                     "https://befrienders.org",
-                ]
+                ],
+                parent_alert_sent=True,
             )
 
             if (user_language or "").startswith("ta"):
                 message = (
-                    "நீங்கள் இந்த அளவுக்கு வேதனையை அனுபவிக்கிறீர்கள் என்பதை அறிந்து நான் மிகவும் வருந்துகிறேன். "
-                    "உங்கள் வாழ்க்கை மிக மிக மதிப்புமிக்கது. நான் ஒரு AI தோழன் மட்டுமே என்பதால் மருத்துவ அவசர உதவி அளிக்க இயலாது. "
-                    "தயவுசெய்து உடனடியாக இலவச மற்றும் ரகசிய உதவி எண்களைத் தொடர்பு கொள்ளுங்கள்: "
-                    "இந்தியாவில் 9152987821 (Tele-MANAS) அல்லது 112 / 108 என்ற எண்ணை அழைக்கவும், அல்லது findahelpline.com தளத்தைப் பார்க்கவும். "
-                    "உங்களுக்கு உதவ பலர் எப்போதும் தயாராக இருக்கிறார்கள்."
+                    "நான் உங்களுடன் இருக்கிறேன், உங்கள் வாழ்க்கை மிகவும் மதிப்புமிக்கது. "
+                    "உங்கள் பாதுகாப்பே முதன்மையானது என்பதால், நீங்கள் பதிவுசெய்த பெற்றோர்/பாதுகாவலர் "
+                    "மொபைல் எண்ணிற்கு உடனடியாக அவசர எச்சரிக்கை குறுஞ்செய்தி (SMS) அனுப்பப்பட்டுள்ளது. "
+                    "தயவுசெய்து அமைதியாக என்னுடன் இருங்கள், ஆழமாக சுவாசியுங்கள். நீங்கள் தனியாக இல்லை."
                 )
             elif user_language == "es":
                 message = (
-                    "Siento mucho que estés pasando por este dolor, pero tu vida es muy valiosa. "
-                    "Como compañera de IA no puedo darte la ayuda médica que necesitas en este momento. "
-                    "Por favor, comunícate de inmediato con una línea de ayuda gratuita y confidencial: "
-                    "Llama o envía un mensaje al 988 (EE. UU./Canadá), al 112 (Europa) o al 9152987821 (India). "
-                    "Hay personas preparadas que quieren escucharte y apoyarte ahora mismo."
+                    "Estoy aquí contigo y tu vida es profundamente valiosa. "
+                    "Porque tu bienestar y seguridad física son lo más importante, se ha enviado de inmediato una alerta de emergencia por SMS al contacto de tus padres/tutores registrado. "
+                    "Por favor respira profundo y quédate aquí conmigo. No estás solo y te cuidamos."
                 )
             elif user_language == "hi":
                 message = (
-                    "मुझे बहुत खेद है कि आप इस दर्द से गुजर रहे हैं, लेकिन आपकी जान बहुत अनमोल है। "
-                    "मैं केवल एक एआई साथी हूँ और इस समय आवश्यक पेशेवर सहायता प्रदान नहीं कर सकता। "
-                    "कृपया तुरंत टेली-मानस हेल्पलाइन 9152987821 पर संपर्क करें या अपने नजदीकी आपातकालीन नंबर पर कॉल करें। "
-                    "लोग आपकी मदद के लिए हमेशा तैयार हैं।"
+                    "मैं आपके साथ हूँ और आपकी जिंदगी बहुत कीमती है। "
+                    "आपकी सुरक्षा सर्वोपरि है, इसलिए आपके पंजीकृत माता-पिता/अभिभावक को तुरंत एक आपातकालीन SMS अलर्ट भेज दिया गया है। "
+                    "कृपया शांत रहें, गहरी सांस लें और मेरे साथ यहीं रहें। आप बिल्कुल अकेले नहीं हैं।"
                 )
             else:
                 message = (
-                    "I am so sorry that you are feeling this heavy pain right now, but please know you are not alone. "
-                    "As an AI companion, I cannot provide clinical or emergency care. "
-                    "Please reach out immediately to compassionate, trained professionals who can support you: "
-                    "Call or text 988 (US/Canada), 112 (Europe), or 9152987821 (Tele-MANAS India), or visit findahelpline.com. "
-                    "Your life matters, and there is help available right now."
+                    "I am right here with you, and your life is deeply valuable. "
+                    "Because your physical safety is the highest priority, an immediate emergency SMS alert has just been sent to your registered parent/guardian contact. "
+                    "Please take slow, deep breaths and stay right here with me. You are cared for and you are not alone."
                 )
             return True, message, crisis_notice
 

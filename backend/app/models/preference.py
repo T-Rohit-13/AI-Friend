@@ -15,9 +15,15 @@ class UserPreference(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     persona: Mapped[str] = mapped_column(String(50), default="friendly_companion")
+    companion_name: Mapped[str] = mapped_column(String(50), default="AI-Friend")
+    avatar_style: Mapped[str] = mapped_column(String(20), default="emoji")  # "emoji" or "human_3d"
+    avatar_gender: Mapped[str] = mapped_column(String(20), default="female")  # "female" or "male"
+    auto_expression_updates: Mapped[bool] = mapped_column(Boolean, default=True)
+    gentle_acknowledgements: Mapped[bool] = mapped_column(Boolean, default=True)
+    avatar_mood_override: Mapped[str] = mapped_column(String(30), default="auto")
     preferred_language: Mapped[str] = mapped_column(String(10), default="en")
     voice_id: Mapped[str] = mapped_column(String(100), default="en-US-JennyNeural")
-    theme: Mapped[str] = mapped_column(String(20), default="dark")
+    theme: Mapped[str] = mapped_column(String(20), default="pastel")
     enable_voice_effects: Mapped[bool] = mapped_column(Boolean, default=True)
     emotion_sharing_opt_in: Mapped[bool] = mapped_column(Boolean, default=True)
     privacy_strict_mode: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { ThemeEngineState, EmotionLabel, UserTheme } from '../../services/themeEngine';
+import type { ThemeEngineState, UserTheme } from '../../services/themeEngine';
 import { getThemeEngine } from '../../services/themeEngine';
 
 interface SettingsPanelProps {
@@ -8,16 +8,7 @@ interface SettingsPanelProps {
   language: string;
 }
 
-const EMOTION_OPTIONS: { value: EmotionLabel; label: string; icon: string }[] = [
-  { value: 'neutral', label: 'Neutral', icon: '😐' },
-  { value: 'happy', label: 'Happy', icon: '😊' },
-  { value: 'sad', label: 'Sad', icon: '😢' },
-  { value: 'angry', label: 'Frustrated', icon: '😤' },
-  { value: 'anxious', label: 'Anxious', icon: '😰' },
-  { value: 'calm', label: 'Calm', icon: '😌' },
-  { value: 'surprised', label: 'Surprised', icon: '😮' },
-  { value: 'frustrated', label: 'Irritated', icon: '😣' },
-];
+
 
 const THEME_OPTIONS: { value: UserTheme; label: string; icon: string; desc: string }[] = [
   { value: 'light', label: 'Pastel Daylight', icon: '🌸', desc: 'Soft lavender, sky blue & cream' },
@@ -36,10 +27,32 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const panelRef = useRef<HTMLDivElement>(null);
   const isTamil = language === 'ta' || language.startsWith('ta');
 
+  // Necessary App Settings state
+  const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>(() => {
+    return (localStorage.getItem('aifriend_font_size') as any) || 'normal';
+  });
+  const [soundEffects, setSoundEffects] = useState<boolean>(() => {
+    const saved = localStorage.getItem('aifriend_sound_effects');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [isSavedNotice, setIsSavedNotice] = useState(false);
+
   useEffect(() => {
     const unsub = engine.subscribe(setState);
     return unsub;
   }, []);
+
+  // Sync font size attribute on root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-size', fontSize);
+    localStorage.setItem('aifriend_font_size', fontSize);
+  }, [fontSize]);
+
+  // Persist sound effects preference
+  const handleSoundToggle = (enabled: boolean) => {
+    setSoundEffects(enabled);
+    localStorage.setItem('aifriend_sound_effects', String(enabled));
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -59,6 +72,16 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   if (!isOpen) return null;
 
+  const handleResetSettings = () => {
+    engine.setUserTheme('dark');
+    engine.setMoodAdaptationEnabled(true);
+    engine.setManualMoodOverride(null);
+    setFontSize('normal');
+    setSoundEffects(true);
+    setIsSavedNotice(true);
+    setTimeout(() => setIsSavedNotice(false), 2000);
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -67,7 +90,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
+          background: 'rgba(0, 0, 0, 0.45)',
           backdropFilter: 'blur(4px)',
           zIndex: 999,
           animation: 'fadeIn 200ms ease',
@@ -80,7 +103,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={isTamil ? 'அமைப்புகள்' : 'Settings & Appearance'}
+        aria-label={isTamil ? 'பயன்பாட்டு அமைப்புகள்' : 'App Settings'}
         tabIndex={-1}
         id="settings-panel"
         style={{
@@ -88,12 +111,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           top: 0,
           right: 0,
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '440px',
           height: '100vh',
-          background: 'var(--bg-surface)',
+          background: 'var(--bg-surface-elevated)',
           backdropFilter: 'blur(24px)',
           borderLeft: '1px solid var(--border-subtle)',
-          boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.3)',
+          boxShadow: '-8px 0 32px rgba(120, 100, 180, 0.25)',
           zIndex: 1000,
           overflowY: 'auto',
           display: 'flex',
@@ -109,27 +132,35 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            position: 'sticky',
+            top: 0,
+            background: 'var(--bg-surface-elevated)',
+            zIndex: 2,
           }}
         >
           <div>
             <h2
               style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: '1.3rem',
+                fontSize: '1.2rem',
                 fontWeight: 700,
                 margin: 0,
+                color: 'var(--text-primary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
               }}
             >
-              ⚙️ {isTamil ? 'அமைப்புகள்' : 'Settings & Appearance'}
+              ⚙️ {isTamil ? 'பயன்பாட்டு அமைப்புகள்' : 'App Settings'}
             </h2>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-              {isTamil ? 'உங்கள் அனுபவத்தை தனிப்பயனாக்குங்கள்' : 'Customize your companion experience'}
+              {isTamil ? 'தீம், தோற்றம் மற்றும் காட்சி விருப்பங்கள்' : 'Theme, color atmosphere & display preferences'}
             </p>
           </div>
           <button
             onClick={onClose}
             className="btn-ghost"
-            style={{ fontSize: '1.2rem', padding: '6px 10px' }}
+            style={{ fontSize: '1.2rem', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer' }}
             aria-label="Close settings"
             id="settings-close-btn"
           >
@@ -137,11 +168,42 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </button>
         </div>
 
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-          {/* ─── Section 1: Theme Selection ─── */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+          {/* Saved feedback notice */}
+          {isSavedNotice && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(99, 216, 165, 0.16)',
+                border: '1px solid var(--pastel-mint-deep, #38B57E)',
+                color: 'var(--pastel-mint-deep, #38B57E)',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>✅</span>
+              <span>{isTamil ? 'அமைப்புகள் மீட்டமைக்கப்பட்டன!' : 'App settings reset to defaults!'}</span>
+            </div>
+          )}
+
+          {/* ─── SECTION 1: THEME SELECTION ─── */}
           <section>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🎨 {isTamil ? 'தீம் தேர்வு' : 'Visual Theme'}
+            <h3
+              style={{
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                marginBottom: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              🎨 {isTamil ? 'பயன்பாட்டு தீம்' : 'App Theme'}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               {THEME_OPTIONS.map((opt) => {
@@ -152,42 +214,54 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     onClick={() => engine.setUserTheme(opt.value)}
                     id={`theme-btn-${opt.value}`}
                     style={{
-                      padding: '14px 12px',
+                      padding: '12px 10px',
                       borderRadius: '14px',
                       border: isActive
                         ? '2px solid var(--current-emotion-color)'
                         : '1px solid var(--border-subtle)',
                       background: isActive
-                        ? 'rgba(45, 212, 191, 0.1)'
+                        ? 'var(--current-emotion-soft)'
                         : 'var(--bg-surface-elevated)',
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      gap: '6px',
+                      gap: '4px',
                       transition: 'all 200ms ease',
                       color: 'var(--text-primary)',
                       boxShadow: isActive ? '0 0 16px var(--current-emotion-glow)' : 'none',
                     }}
                   >
-                    <span style={{ fontSize: '1.5rem' }}>{opt.icon}</span>
-                    <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{opt.label}</span>
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>{opt.desc}</span>
+                    <span style={{ fontSize: '1.4rem' }}>{opt.icon}</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{opt.label}</span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', lineHeight: 1.3, textAlign: 'center' }}>
+                      {opt.desc}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </section>
 
-          {/* ─── Section 2: Mood Adaptation Toggle ─── */}
+          {/* ─── SECTION 2: MOOD & TONE ADAPTIVE UI ─── */}
           <section>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🧠 {isTamil ? 'மனநிலை சார்ந்த UI' : 'Mood-Based UI Adaptation'}
+            <h3
+              style={{
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              🧠 {isTamil ? 'மனநிலை சார்ந்த வண்ண மாற்றம்' : 'Mood Tone UI Color Adaptation'}
             </h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: 1.5 }}>
               {isTamil
-                ? 'இயக்கினால், AI Friend உங்கள் குரல் தொனியின் அடிப்படையில் நிறங்கள் மற்றும் இயக்கங்களை நுட்பமாக மாற்றும். இது ஒரு வடிவமைப்பு அம்சமே, சிகிச்சை அல்ல.'
-                : 'When enabled, AI Friend subtly adapts colours and animations based on vocal tone inference. This is a design feature, not therapy. Colour changes do not claim to improve your mood.'}
+                ? 'இயக்கினால், உங்கள் குரல் தொனி மற்றும் உரையாடலின் உணர்வை AI பகுப்பாய்வு செய்து UI வண்ணங்களை தானாகவே மாற்றும்.'
+                : 'When enabled, the AI continuously analyzes your voice tone & conversation sentiment to dynamically adapt the UI colors and ambient background in real time.'}
             </p>
 
             <div
@@ -195,44 +269,49 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '12px 16px',
+                padding: '12px 14px',
                 borderRadius: '12px',
                 background: 'var(--bg-surface-elevated)',
                 border: '1px solid var(--border-subtle)',
               }}
             >
               <div>
-                <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>
-                  {isTamil ? 'உணர்ச்சி சார்ந்த தீம்' : 'Adaptive mood theming'}
+                <span style={{ fontWeight: 600, fontSize: '0.86rem', color: 'var(--text-primary)' }}>
+                  {isTamil ? 'AI தொனி வண்ண மாற்றம் (தானியங்கி)' : 'AI Tone-Adaptive Coloring (Automated)'}
                 </span>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {state.moodAdaptationEnabled ? '✅ Enabled' : '⬜ Disabled'}
+                  {state.moodAdaptationEnabled ? '✅ AI Active (Listening to voice & tone)' : '⬜ Off (Fixed neutral colors)'}
                 </div>
               </div>
               <button
-                onClick={() => engine.setMoodAdaptationEnabled(!state.moodAdaptationEnabled)}
+                onClick={() => {
+                  engine.setMoodAdaptationEnabled(!state.moodAdaptationEnabled);
+                  if (state.manualMoodOverride) {
+                    engine.setManualMoodOverride(null);
+                  }
+                }}
                 id="mood-adaptation-toggle"
                 role="switch"
                 aria-checked={state.moodAdaptationEnabled}
                 aria-label="Toggle mood-based UI adaptation"
                 style={{
-                  width: '52px',
-                  height: '28px',
-                  borderRadius: '14px',
+                  width: '50px',
+                  height: '26px',
+                  borderRadius: '13px',
                   border: 'none',
                   cursor: 'pointer',
                   position: 'relative',
                   background: state.moodAdaptationEnabled
-                    ? 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))'
-                    : 'rgba(255, 255, 255, 0.15)',
+                    ? 'linear-gradient(135deg, var(--current-emotion-color, #6366f1), #818cf8)'
+                    : 'rgba(150, 150, 150, 0.3)',
                   transition: 'background 200ms ease',
                 }}
               >
                 <span
                   style={{
                     position: 'absolute',
-                    top: '3px',
-                    left: state.moodAdaptationEnabled ? '26px' : '3px',
+                    top: '2px',
+                    left: state.moodAdaptationEnabled ? '26px' : '2px',
                     width: '22px',
                     height: '22px',
                     borderRadius: '50%',
@@ -243,192 +322,153 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 />
               </button>
             </div>
-          </section>
 
-          {/* ─── Section 3: Manual Mood Override ─── */}
-          <section>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              🎭 {isTamil ? 'உங்கள் மனநிலையை தேர்ந்தெடுக்கவும்' : 'How Are You Feeling?'}
-            </h3>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '12px', lineHeight: 1.5 }}>
-              {isTamil
-                ? 'நீங்கள் எப்படி உணருகிறீர்கள் என்பதை நீங்களே தேர்ந்தெடுக்கலாம். இது AI ஊகத்தை மேலெழுதும்.'
-                : 'You can tell us how you\'re feeling. This overrides any AI inference. Select "Neutral" to clear.'}
-            </p>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {EMOTION_OPTIONS.map((opt) => {
-                const isActive = state.manualMoodOverride === opt.value;
-                const tokens = engine.getTokensForEmotion(opt.value);
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      if (isActive || (opt.value === 'neutral' && state.manualMoodOverride === null)) {
-                        engine.setManualMoodOverride(null);
-                      } else {
-                        engine.setManualMoodOverride(opt.value);
-                      }
-                    }}
-                    id={`mood-btn-${opt.value}`}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: '20px',
-                      border: isActive
-                        ? `2px solid ${tokens.emotionColor}`
-                        : '1px solid var(--border-subtle)',
-                      background: isActive
-                        ? `${tokens.emotionColor}22`
-                        : 'var(--bg-surface-elevated)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '0.82rem',
-                      fontWeight: isActive ? 700 : 500,
-                      color: isActive ? tokens.emotionColor : 'var(--text-secondary)',
-                      transition: 'all 200ms ease',
-                      boxShadow: isActive ? `0 0 12px ${tokens.emotionGlow}` : 'none',
-                    }}
-                  >
-                    <span>{opt.icon}</span>
-                    <span>{opt.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {state.manualMoodOverride && (
-              <button
-                onClick={() => engine.setManualMoodOverride(null)}
-                className="btn-ghost"
-                id="clear-mood-override"
-                style={{
-                  marginTop: '10px',
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)',
-                  textDecoration: 'underline',
-                }}
-              >
-                {isTamil ? 'கைமுறை மேலெழுதலை அழிக்கவும்' : 'Clear manual override (use AI inference)'}
-              </button>
-            )}
-          </section>
-
-          {/* ─── Section 4: Current State Info ─── */}
-          <section>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              📊 {isTamil ? 'தற்போதைய நிலை' : 'Current Mood State'}
-            </h3>
+            {/* Live AI Tone Detection Status Card (Read-only, no manual overrides) */}
             <div
               style={{
-                padding: '14px 16px',
-                borderRadius: '14px',
-                background: 'var(--bg-surface-elevated)',
+                marginTop: '10px',
+                padding: '10px 14px',
+                borderRadius: '12px',
+                background: 'var(--current-emotion-soft)',
                 border: '1px solid var(--border-subtle)',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                fontSize: '0.82rem',
+                alignItems: 'center',
+                justifyContent: 'space-between',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Active mood:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span
                   style={{
-                    fontWeight: 700,
-                    color: state.activeTokens.emotionColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    background: 'var(--current-emotion-color)',
+                    boxShadow: '0 0 10px var(--current-emotion-color)',
+                    display: 'inline-block',
+                    animation: 'pulseAura 2s infinite ease-in-out',
                   }}
-                >
-                  <span
-                    style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      background: state.activeTokens.emotionColor,
-                      boxShadow: `0 0 8px ${state.activeTokens.emotionColor}`,
-                      display: 'inline-block',
-                    }}
-                  />
-                  {state.activeTokens.label}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Source:</span>
-                <span style={{ fontWeight: 600 }}>
-                  {state.manualMoodOverride
-                    ? '🎭 Manual override'
-                    : state.moodAdaptationEnabled
-                    ? '🎙️ Voice inference'
-                    : '⬜ Adaptation disabled'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Emotion model:</span>
-                <span style={{ fontWeight: 600, color: state.modelAvailable ? '#34d399' : '#f87171' }}>
-                  {state.modelAvailable ? '🟢 Available' : '🔴 Unavailable'}
-                </span>
-              </div>
-              {state.lastRawPrediction && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Last raw prediction:</span>
-                  <span style={{ fontWeight: 600 }}>
-                    {state.lastRawPrediction.primary_emotion} ({(state.lastRawPrediction.confidence * 100).toFixed(0)}%)
-                  </span>
+                />
+                <div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {isTamil ? 'AI கண்டறிந்த தற்போதைய தொனி:' : 'AI-Detected Tone & Mood:'}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--current-emotion-color)', fontWeight: 600 }}>
+                    {state.activeTokens.label} {state.lastEmotionSource ? `(${state.lastEmotionSource === 'voice' ? 'Vocal Speech' : 'Chat Sentiment'})` : ''}
+                  </div>
                 </div>
-              )}
+              </div>
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  background: 'var(--bg-surface-elevated)',
+                  color: 'var(--text-secondary)',
+                  fontWeight: 600,
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                100% AI Driven
+              </span>
             </div>
           </section>
 
-          {/* ─── Section 5: Accessibility ─── */}
-          <section>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              ♿ {isTamil ? 'அணுகல் எளிமை' : 'Accessibility'}
-            </h3>
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '10px', lineHeight: 1.5 }}>
-              {isTamil
-                ? 'இயக்கத்தை குறைக்க உங்கள் OS அமைப்புகளில் "Reduce Motion" ஐ இயக்கவும்.'
-                : 'To reduce animations, enable "Reduce Motion" in your OS accessibility settings. All themes meet WCAG 2.1 AA contrast.'}
-            </p>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span>⌨️ Keyboard: Alt+1-5 for modes, Alt+C for contrast, Alt+M for mute</span>
-              <span>🎨 Colour is never the sole indicator of any status</span>
-              <span>🔒 Core navigation is always visible in every mood state</span>
-            </div>
-          </section>
-
-          {/* ─── Transparency Notice ─── */}
-          <div
+          {/* ─── SECTION 4: NECESSARY APP SETTINGS ─── */}
+          <section
             style={{
-              padding: '12px 16px',
-              borderRadius: '12px',
-              background: 'rgba(45, 212, 191, 0.08)',
-              border: '1px solid rgba(45, 212, 191, 0.2)',
-              fontSize: '0.72rem',
-              color: 'var(--text-muted)',
-              lineHeight: 1.6,
+              padding: '14px',
+              borderRadius: '14px',
+              background: 'var(--bg-surface-card)',
+              border: '1px solid var(--border-subtle)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
             }}
           >
-            <strong style={{ color: 'var(--color-primary-400)' }}>🛡️ Transparency:</strong>{' '}
-            {isTamil
-              ? 'மனநிலை சார்ந்த நிற மாற்றங்கள் வடிவமைப்பு அம்சங்கள். அவை சிகிச்சை அல்ல மற்றும் உங்கள் மனநிலையை மாற்றுவதாக உறுதியளிக்கவில்லை.'
-              : 'Mood-based colour changes are design features, not therapy. They do not claim to therapeutically improve your emotional state. Vocal emotion is a tentative signal, not proof of how you feel.'}
-          </div>
-        </div>
+            <h3
+              style={{
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              🔧 {isTamil ? 'அத்தியாவசிய அமைப்புகள்' : 'Necessary App Settings'}
+            </h3>
 
-        <style>{`
-          @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes slideInRight {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
-          }
-        `}</style>
+            {/* Font Size Scale */}
+            <div>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: '6px' }}>
+                🔤 {isTamil ? 'எழுத்துரு அளவு (Font Size)' : 'Text Size'}:
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                {(['normal', 'large', 'xlarge'] as const).map((sz) => (
+                  <button
+                    key={sz}
+                    onClick={() => setFontSize(sz)}
+                    style={{
+                      padding: '7px 4px',
+                      borderRadius: '8px',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: fontSize === sz ? '2px solid var(--current-emotion-color)' : '1px solid var(--border-subtle)',
+                      background: fontSize === sz ? 'var(--current-emotion-soft)' : 'var(--bg-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {sz === 'normal' ? 'Standard' : sz === 'large' ? 'Large' : 'Extra Large'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sound Effects Toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  🔔 {isTamil ? 'ஒலி விளைவுகள் (Sound Effects)' : 'Sound Effects'}
+                </span>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {isTamil ? 'செய்தி மற்றும் குரல் ஒலிகள்' : 'Message & call audio feedback'}
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={soundEffects}
+                onChange={(e) => handleSoundToggle(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* Reset All App Settings Button */}
+            <div style={{ paddingTop: '6px', borderTop: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                onClick={handleResetSettings}
+                className="btn-ghost"
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                🔄 {isTamil ? 'இயல்புநிலைக்கு மீட்டமை' : 'Reset All to Defaults'}
+              </button>
+            </div>
+          </section>
+        </div>
       </div>
     </>
   );

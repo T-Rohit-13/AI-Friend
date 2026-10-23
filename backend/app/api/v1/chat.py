@@ -42,6 +42,67 @@ async def list_sessions(
     return [SessionResponse.model_validate(s) for s in sessions]
 
 
+@router.get("/history/by-mood")
+async def get_chat_history_by_mood(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve user chat sessions grouped by emotion/mood category."""
+    from sqlalchemy.orm import selectinload
+    query = (
+        select(ChatSession)
+        .options(selectinload(ChatSession.messages))
+        .where(ChatSession.user_id == current_user.id)
+        .order_by(ChatSession.updated_at.desc())
+    )
+    result = await db.execute(query)
+    sessions = result.scalars().all()
+
+    grouped: dict[str, list] = {
+        "happy": [],
+        "calm": [],
+        "sad": [],
+        "stressed": [],
+        "excited": [],
+        "neutral": [],
+    }
+
+    for s in sessions:
+        mood = (s.dominant_mood or "neutral").lower().strip()
+        if any(k in mood for k in ["happy", "joy", "warm", "cheerful", "playful"]):
+            key = "happy"
+        elif any(k in mood for k in ["calm", "peace", "focus", "ground"]):
+            key = "calm"
+        elif any(k in mood for k in ["sad", "low", "gloom", "depress", "tired"]):
+            key = "sad"
+        elif any(k in mood for k in ["stress", "frustrat", "ang", "irrit"]):
+            key = "stressed"
+        elif any(k in mood for k in ["excit", "surpris", "energet"]):
+            key = "excited"
+        else:
+            key = "neutral"
+
+        last_preview = ""
+        if s.messages:
+            last_msg = s.messages[-1]
+            last_preview = last_msg.content[:80] + ("..." if len(last_msg.content) > 80 else "")
+
+        grouped[key].append({
+            "id": s.id,
+            "title": s.title,
+            "persona": s.persona,
+            "language": s.language,
+            "mode": s.mode,
+            "dominant_mood": s.dominant_mood or key,
+            "message_count": len(s.messages) if s.messages else 0,
+            "last_message_preview": last_preview,
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        })
+
+    return grouped
+
+
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(
     payload: SessionCreate,
@@ -54,6 +115,7 @@ async def create_session(
         title=payload.title or "New Conversation",
         persona=payload.persona,
         language=payload.language or current_user.preferred_language,
+        mode=payload.mode or "normal",
     )
     db.add(session)
     await db.commit()
@@ -238,71 +300,127 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # 5. Context Engine Turn Processing & Mood Analysis
+    # 5. Intent-based Navigation Check
+    play_intent = any(phrase in content_lower for phrase in [
+        "shall we play", "let's play a game", "lets play a game", "play a game",
+        "play riddles", "play tic tac toe", "play rock paper scissors", "wanna play",
+        "can we play", "let's play", "lets play"
+    ])
+    navigation_intent = "games" if play_intent else None
+
+    # 6. Dump Mode vs Normal Chat Turn Processing
     from backend.app.services.context_engine import ContextEngine
     from backend.app.services.mood_analysis import MoodAnalysisService
+    from backend.app.models.preference import UserPreference
 
     # Analyze user's text emotion/mood and stress level
     text_analysis = MoodAnalysisService.analyze_text(payload.content)
     text_emotion = text_analysis.primary_emotion
 
-    active_provider = (getattr(settings, "AI_PROVIDER", None) or getattr(settings, "LLM_PROVIDER", "openai")).lower()
-    active_model = getattr(settings, "GEMINI_MODEL", "") if active_provider == "gemini" else getattr(settings, "OPENAI_MODEL", "")
-    logger.info(
-        f"Chat turn dispatched: session_id={session.id} provider={active_provider} model={active_model} "
-        f"lang={session.language} persona={session.persona} history_count={len(history_list)}"
-    )
+    is_dump_mode = (getattr(session, "mode", "normal") == "dump") or (payload.mode == "dump")
 
-    turn_result = await ContextEngine.process_turn(
-        user_message=payload.content,
-        session_id=session.id,
-        user_language=session.language,
-        persona=session.persona,
-        vocal_emotion=payload.detected_emotion if payload.detected_emotion != "neutral" else None,
-        text_emotion=text_emotion,
-        memories=memories,
-        history=history_list,
-    )
+    if is_dump_mode:
+        # Check gentle acknowledgements preference
+        pref_query = select(UserPreference).where(UserPreference.user_id == current_user.id)
+        pref_res = await db.execute(pref_query)
+        user_pref = pref_res.scalar_one_or_none()
+        allow_gentle = user_pref.gentle_acknowledgements if user_pref else True
 
-    reply_content = turn_result["content"]
-    companion_emotion = turn_result["companion_emotion"]
-    user_detected_emotion = turn_result.get("detected_emotion", text_emotion)
-    safety_notice = turn_result["safety_notice"]
+        if allow_gentle:
+            import random
+            gentle_phrases = [
+                "I'm listening, take all the time you need.",
+                "I hear you. I'm right here with you.",
+                "Thank you for sharing that with me. Let it out.",
+                "Take a gentle breath. I'm listening.",
+            ]
+            reply_content = random.choice(gentle_phrases)
+        else:
+            reply_content = ""
 
-    # If the reply contains Tamil script, ensure language is recognized as ta-IN
-    reply_is_tamil = any(0x0B80 <= ord(c) <= 0x0BFF for c in reply_content) or session.language.startswith("ta")
-    effective_lang = "ta-IN" if reply_is_tamil else session.language
-    if reply_is_tamil and not session.language.startswith("ta"):
-        session.language = "ta-IN"
-        db.add(session)
-        await db.flush()
+        companion_emotion = "calm"
+        user_detected_emotion = text_emotion
+        safety_notice = None
+        effective_lang = session.language
+    else:
+        active_provider = (getattr(settings, "AI_PROVIDER", None) or getattr(settings, "LLM_PROVIDER", "openai")).lower()
+        active_model = getattr(settings, "GEMINI_MODEL", "") if active_provider == "gemini" else getattr(settings, "OPENAI_MODEL", "")
+        logger.info(
+            f"Chat turn dispatched: session_id={session.id} provider={active_provider} model={active_model} "
+            f"lang={session.language} persona={session.persona} history_count={len(history_list)}"
+        )
 
-    logger.info(
-        f"Chat turn completed: session_id={session.id} provider={active_provider} "
-        f"reply_len={len(reply_content)} lang={effective_lang} companion_emotion={companion_emotion}"
-    )
+        turn_result = await ContextEngine.process_turn(
+            user_message=payload.content,
+            session_id=session.id,
+            user_language=session.language,
+            persona=session.persona,
+            vocal_emotion=payload.detected_emotion if payload.detected_emotion != "neutral" else None,
+            text_emotion=text_emotion,
+            memories=memories,
+            history=history_list,
+        )
+
+        reply_content = turn_result["content"]
+        companion_emotion = turn_result["companion_emotion"]
+        user_detected_emotion = turn_result.get("detected_emotion", text_emotion)
+        safety_notice = turn_result["safety_notice"]
+
+        # If acute crisis detected, immediately dispatch high-priority parent SMS alert
+        if safety_notice and safety_notice.is_crisis:
+            from backend.app.services.sms import SMSService, mask_phone_number
+            sms_res = await SMSService.send_parent_crisis_alert(
+                parent_phone=current_user.parent_phone_number,
+                user_name=current_user.display_name or "AI Friend User",
+                user_email=current_user.email,
+                user_message=payload.content,
+            )
+            safety_notice.parent_alert_sent = sms_res.get("success", False)
+            safety_notice.parent_contact_notified = mask_phone_number(current_user.parent_phone_number)
+            safety_notice.alert_status = sms_res.get("status")
+
+        # If the reply contains Tamil script, ensure language is recognized as ta-IN
+        reply_is_tamil = any(0x0B80 <= ord(c) <= 0x0BFF for c in reply_content) or session.language.startswith("ta")
+        effective_lang = "ta-IN" if reply_is_tamil else session.language
+        if reply_is_tamil and not session.language.startswith("ta"):
+            session.language = "ta-IN"
+            db.add(session)
+            await db.flush()
+
+        logger.info(
+            f"Chat turn completed: session_id={session.id} provider={active_provider} "
+            f"reply_len={len(reply_content)} lang={effective_lang} companion_emotion={companion_emotion}"
+        )
 
     # Update user message detected emotion
     user_msg.detected_emotion = user_detected_emotion
+    if user_detected_emotion and user_detected_emotion != "neutral":
+        session.dominant_mood = user_detected_emotion
+        db.add(session)
 
-    # 6. Save Assistant Message
-    import urllib.parse
-    encoded_reply = urllib.parse.quote(reply_content)
-    audio_url = f"/api/v1/voice/tts?text={encoded_reply}&language={effective_lang}"
+    # 7. Save Assistant Message (if generated)
+    assistant_msg = None
+    audio_url = None
+    if reply_content:
+        import urllib.parse
+        encoded_reply = urllib.parse.quote(reply_content)
+        audio_url = f"/api/v1/voice/tts?text={encoded_reply}&language={effective_lang}"
 
-    assistant_msg = Message(
-        session_id=session.id,
-        role="assistant",
-        content=reply_content,
-        audio_url=audio_url,
-        companion_emotion=companion_emotion,
-    )
-    db.add(assistant_msg)
+        assistant_msg = Message(
+            session_id=session.id,
+            role="assistant",
+            content=reply_content,
+            audio_url=audio_url,
+            companion_emotion=companion_emotion,
+        )
+        db.add(assistant_msg)
+
     await db.commit()
-    await db.refresh(assistant_msg)
+    if assistant_msg:
+        await db.refresh(assistant_msg)
 
     return ChatTurnResponse(
-        message_id=assistant_msg.id,
+        message_id=assistant_msg.id if assistant_msg else user_msg.id,
         role="assistant",
         content=reply_content,
         language=effective_lang,
@@ -310,6 +428,7 @@ async def send_message(
         companion_emotion=companion_emotion,
         user_emotion=user_detected_emotion,
         safety_notice=safety_notice,
+        navigation_intent=navigation_intent,
     )
 
 
@@ -357,6 +476,14 @@ async def stream_chat_turn(
 
     async def event_generator():
         if is_flagged and direct_reply:
+            if safety_notice and safety_notice.is_crisis:
+                from backend.app.services.sms import SMSService, mask_phone_number
+                await SMSService.send_parent_crisis_alert(
+                    parent_phone=current_user.parent_phone_number,
+                    user_name=current_user.display_name or "AI Friend User",
+                    user_email=current_user.email,
+                    user_message=payload.content,
+                )
             yield f"data: {json.dumps({'chunk': direct_reply, 'is_crisis': True})}\n\n"
             yield "data: [DONE]\n\n"
             return

@@ -17,6 +17,8 @@ class ChatSession(Base):
     title: Mapped[str] = mapped_column(String(200), default="New Conversation")
     persona: Mapped[str] = mapped_column(String(50), default="friendly_companion")
     language: Mapped[str] = mapped_column(String(10), default="en")
+    mode: Mapped[str] = mapped_column(String(20), default="normal")  # "normal" or "dump"
+    dominant_mood: Mapped[str] = mapped_column(String(30), default="neutral")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 

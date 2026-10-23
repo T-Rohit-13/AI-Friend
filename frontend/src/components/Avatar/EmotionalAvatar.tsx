@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import {
+  getAvatarPreferences,
+  type AvatarStyle,
+  type CharacterGender,
+} from '../../services/avatarPreferences';
 
 export type CompanionState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -21,6 +26,8 @@ export interface EmotionalAvatarProps {
   onToggleAutoMood?: () => void;
   onSetOverrideEmotion?: (emotion: AvatarExpression | null) => void;
   showControls?: boolean;
+  avatarStyle?: AvatarStyle;
+  gender?: CharacterGender;
 }
 
 /**
@@ -48,21 +55,37 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
   size = 140,
   autoMoodEnabled = true,
   manualOverrideEmotion = null,
-  onToggleAutoMood,
-  onSetOverrideEmotion,
+  onToggleAutoMood: _onToggleAutoMood,
+  onSetOverrideEmotion: _onSetOverrideEmotion,
   showControls = false,
+  avatarStyle: _avatarStyle,
+  gender: _gender,
 }) => {
-  // Determine effective expression: manual override takes priority, otherwise normalized input
-  const activeExpression: AvatarExpression = manualOverrideEmotion
-    ? manualOverrideEmotion
-    : autoMoodEnabled
+  // Sync with user's saved preferences
+  const [prefs, setPrefs] = useState(() => getAvatarPreferences());
+
+  useEffect(() => {
+    const handlePrefChange = (e: any) => {
+      if (e.detail) setPrefs(e.detail);
+    };
+    window.addEventListener('ai_friend_avatar_prefs_changed', handlePrefChange);
+    return () => window.removeEventListener('ai_friend_avatar_prefs_changed', handlePrefChange);
+  }, []);
+
+  // Determine effective expression: manual override or saved preference override takes priority
+  const effectiveOverride = manualOverrideEmotion || (prefs.avatarMoodOverride && prefs.avatarMoodOverride !== 'auto' ? normalizeExpression(prefs.avatarMoodOverride) : null);
+  const isAutoMoodActive = autoMoodEnabled && prefs.autoMoodEnabled !== false;
+
+  const activeExpression: AvatarExpression = effectiveOverride
+    ? effectiveOverride
+    : isAutoMoodActive
     ? normalizeExpression(emotion)
     : 'neutral';
 
   const [isBlinking, setIsBlinking] = useState(false);
   const [mouthPhase, setMouthPhase] = useState(0);
 
-  // Periodic natural blink
+  // Periodic natural blink for Emoji companion
   useEffect(() => {
     const blinkInterval = setInterval(() => {
       setIsBlinking(true);
@@ -85,7 +108,8 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
     return () => clearInterval(talkTimer);
   }, [state]);
 
-  // Soft Pastel Palette corresponding to emotional tone
+  // Expressive Animated Emoji Companion (smooth vector with rich expressions, eyelid physics & speech sync)
+  // Option A: Animated Emoji Companion (improved with soft pastel aesthetic, smooth expressions & speech sync)
   const expressionStyles: Record<
     AvatarExpression,
     {
@@ -174,7 +198,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
 
     switch (activeExpression) {
       case 'happy':
-        // High, cheerful arched brows
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 44 48 Q 58 41 70 47" />
@@ -182,7 +205,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
           </g>
         );
       case 'excited':
-        // Lifted high with enthusiasm
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 44 45 Q 58 37 70 44" />
@@ -190,7 +212,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
           </g>
         );
       case 'sad':
-        // Compassionate upward inner tilt
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 45 46 Q 58 52 70 47" />
@@ -198,7 +219,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
           </g>
         );
       case 'calm':
-        // Flat, relaxed natural curve
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 46 50 Q 58 48 70 50" />
@@ -206,7 +226,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
           </g>
         );
       case 'frustrated':
-        // Furrowed brow, angled inward
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 45 47 Q 58 51 70 53" />
@@ -214,7 +233,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
           </g>
         );
       case 'confused':
-        // Asymmetric: one raised inquisitive brow, one lowered
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 44 42 Q 57 37 69 43" />
@@ -223,7 +241,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
         );
       case 'neutral':
       default:
-        // Soft, neutral attentive arcs
         return (
           <g stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" fill="none">
             <path d="M 46 49 Q 58 45 70 49" />
@@ -237,7 +254,6 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
   const renderEyes = () => {
     const color = style.featureColor;
 
-    // Blink state takes precedence
     if (isBlinking) {
       return (
         <g stroke={color} strokeWidth="3.5" strokeLinecap="round" fill="none">
@@ -248,212 +264,161 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
     }
 
     if (activeExpression === 'happy' && state !== 'listening') {
-      // Crescent smiling eyes (^ ^)
       return (
-        <g stroke={color} strokeWidth="3.8" strokeLinecap="round" fill="none">
-          <path d="M 48 68 Q 58 58 68 68" />
-          <path d="M 92 68 Q 102 58 112 68" />
+        <g stroke={color} strokeWidth="3.5" strokeLinecap="round" fill="none">
+          <path d="M 50 68 Q 59 60 68 68" />
+          <path d="M 92 68 Q 101 60 110 68" />
         </g>
       );
     }
 
     if (activeExpression === 'excited') {
-      // Big sparkling round eyes with twinkles
-      return (
-        <g fill={color}>
-          <circle cx="58" cy="65" r="9" />
-          <circle cx="102" cy="65" r="9" />
-          <circle cx="55" cy="61" r="3.2" fill="#FFFFFF" />
-          <circle cx="99" cy="61" r="3.2" fill="#FFFFFF" />
-          <circle cx="62" cy="68" r="1.8" fill="#FFFFFF" />
-          <circle cx="106" cy="68" r="1.8" fill="#FFFFFF" />
-        </g>
-      );
-    }
-
-    if (activeExpression === 'sad') {
-      // Gentle drooping eyelids
       return (
         <g>
-          <ellipse cx="58" cy="66" rx="7.5" ry="7" fill={color} />
-          <ellipse cx="102" cy="66" rx="7.5" ry="7" fill={color} />
-          <circle cx="56" cy="63" r="2.4" fill="#FFFFFF" />
-          <circle cx="100" cy="63" r="2.4" fill="#FFFFFF" />
-          {/* Eyelid cover */}
-          <path d="M 50 63 Q 58 66 66 63" stroke={style.skinGradEnd} strokeWidth="3" fill="none" />
-          <path d="M 94 63 Q 102 66 110 63" stroke={style.skinGradEnd} strokeWidth="3" fill="none" />
+          <circle cx="59" cy="66" r="7.5" fill={color} />
+          <circle cx="101" cy="66" r="7.5" fill={color} />
+          {/* Sparkles */}
+          <circle cx="57" cy="64" r="2.8" fill="#FFFFFF" />
+          <circle cx="99" cy="64" r="2.8" fill="#FFFFFF" />
+          <circle cx="62" cy="68" r="1.2" fill="#FFFFFF" />
+          <circle cx="104" cy="68" r="1.2" fill="#FFFFFF" />
         </g>
       );
     }
 
-    if (activeExpression === 'calm') {
-      // Soft half-lidded serene gaze
-      return (
-        <g stroke={color} strokeWidth="3.5" strokeLinecap="round" fill="none">
-          <path d="M 49 66 Q 58 71 67 66" />
-          <path d="M 93 66 Q 102 71 111 66" />
-        </g>
-      );
-    }
-
-    if (activeExpression === 'frustrated') {
-      // Narrowed, focused gaze
-      return (
-        <g fill={color}>
-          <ellipse cx="58" cy="66" rx="7" ry="5.5" />
-          <ellipse cx="102" cy="66" rx="7" ry="5.5" />
-          <circle cx="57" cy="64" r="2" fill="#FFFFFF" />
-          <circle cx="101" cy="64" r="2" fill="#FFFFFF" />
-        </g>
-      );
-    }
-
-    if (activeExpression === 'confused') {
-      // Asymmetric: one slightly squinted, one wide
-      return (
-        <g fill={color}>
-          <ellipse cx="58" cy="64" rx="8" ry="8" />
-          <circle cx="56" cy="61" r="2.8" fill="#FFFFFF" />
-          <ellipse cx="102" cy="66" rx="6.5" ry="5" />
-          <circle cx="101" cy="64" r="2" fill="#FFFFFF" />
-        </g>
-      );
-    }
-
-    // Default Neutral / Attentive Eyes
+    // Default open, attentive eyes with natural glint
     return (
-      <g fill={color}>
-        <ellipse cx="58" cy="65" rx="7.5" ry="8" />
-        <ellipse cx="102" cy="65" rx="7.5" ry="8" />
-        <circle cx="55.5" cy="62" r="2.8" fill="#FFFFFF" />
-        <circle cx="99.5" cy="62" r="2.8" fill="#FFFFFF" />
-        <circle cx="61" cy="68" r="1.4" fill="#FFFFFF" />
-        <circle cx="105" cy="68" r="1.4" fill="#FFFFFF" />
+      <g>
+        <circle cx="59" cy="67" r="6.5" fill={color} />
+        <circle cx="101" cy="67" r="6.5" fill={color} />
+        <circle cx="57.2" cy="65.2" r="2.4" fill="#FFFFFF" />
+        <circle cx="99.2" cy="65.2" r="2.4" fill="#FFFFFF" />
       </g>
     );
   };
 
-  // Mouth geometry based on emotion + speaking lip-sync
+  // Mouth geometry based on emotion + speech state
   const renderMouth = () => {
     const color = style.featureColor;
 
-    // Speaking lip-sync animation
+    // Talking mouth movement when speaking
     if (state === 'speaking') {
-      if (mouthPhase === 0) {
-        // Closed / gentle
-        return <path d="M 72 90 Q 80 94 88 90" stroke={color} strokeWidth="3" strokeLinecap="round" fill="none" />;
-      } else if (mouthPhase === 1) {
-        // Open oval phoneme
-        return <ellipse cx="80" cy="91" rx="5.5" ry="6" fill={color} />;
-      } else if (mouthPhase === 2) {
-        // Wide smile open
-        return (
-          <path
-            d="M 70 89 Q 80 100 90 89 Q 80 95 70 89 Z"
-            fill={color}
-          />
-        );
-      } else {
-        // Small round 'oo' shape
-        return <ellipse cx="80" cy="91" rx="4" ry="5" fill={color} />;
+      switch (mouthPhase) {
+        case 0:
+          return (
+            <path
+              d="M 68 85 Q 80 81 92 85 Q 80 98 68 85 Z"
+              fill="#E76F42"
+              stroke={color}
+              strokeWidth="2.5"
+            />
+          );
+        case 1:
+          return (
+            <ellipse
+              cx="80"
+              cy="86"
+              rx="7"
+              ry="8"
+              fill="#E76F42"
+              stroke={color}
+              strokeWidth="2.5"
+            />
+          );
+        case 2:
+          return (
+            <path
+              d="M 70 85 Q 80 82 90 85 Q 80 93 70 85 Z"
+              fill="#E76F42"
+              stroke={color}
+              strokeWidth="2.5"
+            />
+          );
+        case 3:
+        default:
+          return (
+            <path
+              d="M 70 86 Q 80 90 90 86"
+              fill="none"
+              stroke={color}
+              strokeWidth="3.2"
+              strokeLinecap="round"
+            />
+          );
       }
     }
 
-    // Static emotional mouth shapes
+    // Emotion resting mouth shapes
     switch (activeExpression) {
       case 'happy':
-        // Wide, cheerful curved smile with dimple hints
         return (
-          <g>
-            <path
-              d="M 68 88 Q 80 102 92 88"
-              stroke={color}
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              fill="none"
-            />
-            {/* Dimples */}
-            <path d="M 66 87 Q 67 89 68 91" stroke={color} strokeWidth="2" strokeLinecap="round" fill="none" />
-            <path d="M 94 87 Q 93 89 92 91" stroke={color} strokeWidth="2" strokeLinecap="round" fill="none" />
-          </g>
+          <path
+            d="M 66 84 Q 80 97 94 84"
+            fill="none"
+            stroke={color}
+            strokeWidth="3.5"
+            strokeLinecap="round"
+          />
         );
-
       case 'excited':
-        // Open joyous laughing smile
         return (
-          <g>
-            <path
-              d="M 69 86 Q 80 104 91 86 Q 80 91 69 86 Z"
-              fill={color}
-            />
-            <path
-              d="M 74 95 Q 80 97 86 95"
-              stroke="#FF8A65"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </g>
+          <path
+            d="M 68 83 Q 80 99 92 83 Z"
+            fill="#FA9F7A"
+            stroke={color}
+            strokeWidth="2.8"
+            strokeLinecap="round"
+          />
         );
-
       case 'sad':
-        // Gentle, empathetic downturned curve
         return (
           <path
-            d="M 71 94 Q 80 88 89 94"
+            d="M 68 91 Q 80 83 92 91"
+            fill="none"
             stroke={color}
             strokeWidth="3.2"
             strokeLinecap="round"
-            fill="none"
           />
         );
-
       case 'calm':
-        // Soft serene slight smile
         return (
           <path
-            d="M 73 90 Q 80 95 87 90"
-            stroke={color}
-            strokeWidth="3"
-            strokeLinecap="round"
+            d="M 70 86 Q 80 89 90 86"
             fill="none"
+            stroke={color}
+            strokeWidth="3.0"
+            strokeLinecap="round"
           />
         );
-
       case 'frustrated':
-        // Straight / slightly wavy tense line
         return (
           <path
-            d="M 72 92 L 88 92"
+            d="M 71 88 L 89 88"
+            fill="none"
             stroke={color}
             strokeWidth="3.2"
             strokeLinecap="round"
-            fill="none"
           />
         );
-
       case 'confused':
-        // Off-center questioning quirk
         return (
           <path
-            d="M 72 92 Q 78 93 84 90 Q 88 88 90 91"
-            stroke={color}
-            strokeWidth="3"
-            strokeLinecap="round"
+            d="M 70 88 Q 75 86 80 88 Q 85 90 90 87"
             fill="none"
+            stroke={color}
+            strokeWidth="3.0"
+            strokeLinecap="round"
           />
         );
-
       case 'neutral':
       default:
-        // Gentle relaxed natural arc
         return (
           <path
-            d="M 73 91 Q 80 95 87 91"
-            stroke={color}
-            strokeWidth="3"
-            strokeLinecap="round"
+            d="M 72 87 Q 80 89 88 87"
             fill="none"
+            stroke={color}
+            strokeWidth="3.0"
+            strokeLinecap="round"
           />
         );
     }
@@ -461,240 +426,179 @@ export const EmotionalAvatar: React.FC<EmotionalAvatarProps> = ({
 
   return (
     <div
+      className="emotional-avatar-container"
       style={{
-        display: 'flex',
+        display: 'inline-flex',
         flexDirection: 'column',
         alignItems: 'center',
-        userSelect: 'none',
         position: 'relative',
+        transition: 'transform 300ms ease',
       }}
     >
-      {/* Avatar Face Container with Floating Animation & Glow */}
-      <div
-        className="animate-robot-hover"
+      <svg
+        width={width}
+        height={height}
+        viewBox="0 0 160 168"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
         style={{
-          width: `${width}px`,
-          height: `${height}px`,
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          filter: `drop-shadow(0 14px 28px ${style.auraColor})`,
-          transition: 'filter 500ms cubic-bezier(0.4, 0, 0.2, 1)',
+          filter:
+            state === 'listening'
+              ? 'drop-shadow(0 0 16px rgba(99, 216, 165, 0.6))'
+              : state === 'speaking'
+              ? 'drop-shadow(0 0 16px rgba(157, 141, 241, 0.6))'
+              : `drop-shadow(0 8px 24px ${style.auraColor})`,
+          transition: 'filter 400ms ease',
         }}
-        title={`${personaName} • Expression: ${style.label} (${activeExpression})`}
+        aria-label={`${personaName} Animated Emoji Avatar (${activeExpression})`}
       >
-        {/* Soft Ambient Aura Halo */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: '8px',
-            borderRadius: '50%',
-            background: `radial-gradient(circle, ${style.auraColor} 0%, transparent 72%)`,
-            filter: 'blur(16px)',
-            opacity: state === 'listening' || state === 'speaking' ? 0.95 : 0.65,
-            transition: 'all 500ms ease',
-          }}
-        />
+        <defs>
+          <radialGradient id="avatarAura" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={style.auraColor} />
+            <stop offset="100%" stopColor="transparent" stopOpacity="0" />
+          </radialGradient>
 
-        {/* Pulse Ripple when Listening or Speaking */}
-        {(state === 'listening' || state === 'speaking') && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: '-10px',
-              borderRadius: '50%',
-              border: `2px solid ${style.featureColor}`,
-              opacity: 0.4,
-              animation: 'ripplePulse 1.8s cubic-bezier(0, 0.2, 0.8, 1) infinite',
-              pointerEvents: 'none',
-            }}
-          />
+          <linearGradient id="avatarFace" x1="0" y1="20" x2="0" y2="140" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor={style.skinGradStart} />
+            <stop offset="100%" stopColor={style.skinGradEnd} />
+          </linearGradient>
+
+          {/* Listening Pulsing Glow Ring */}
+          {state === 'listening' && (
+            <filter id="listeningGlow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          )}
+        </defs>
+
+        {/* Ambient Halo */}
+        <circle cx="80" cy="80" r="74" fill="url(#avatarAura)" />
+
+        {/* Active Listening Pulse Ring */}
+        {state === 'listening' && (
+          <circle
+            cx="80"
+            cy="80"
+            r="66"
+            stroke="var(--pastel-mint-accent, #63D8A5)"
+            strokeWidth="2.5"
+            strokeDasharray="6 4"
+            fill="none"
+            opacity="0.8"
+          >
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 80 80"
+              to="360 80 80"
+              dur="6s"
+              repeatCount="indefinite"
+            />
+          </circle>
         )}
 
-        {/* Expressive Friendly Face SVG */}
-        <svg
-          viewBox="0 0 160 160"
-          width={width}
-          height={height}
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          style={{ overflow: 'visible', transition: 'all 400ms ease' }}
-        >
-          <defs>
-            <linearGradient id="avatarSkinGrad" x1="30" y1="20" x2="130" y2="140" gradientUnits="userSpaceOnUse">
-              <stop stopColor={style.skinGradStart} />
-              <stop offset="1" stopColor={style.skinGradEnd} />
-            </linearGradient>
+        {/* Main Face Contour */}
+        <circle
+          cx="80"
+          cy="80"
+          r="58"
+          fill="url(#avatarFace)"
+          stroke="rgba(255, 255, 255, 0.85)"
+          strokeWidth="3.5"
+        />
 
-            <filter id="blushGlow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-            </filter>
-          </defs>
+        {/* Soft Blush Cheeks */}
+        <ellipse
+          cx="52"
+          cy="80"
+          rx="9"
+          ry="5.5"
+          fill={style.blushColor}
+          fillOpacity={style.blushOpacity}
+        />
+        <ellipse
+          cx="108"
+          cy="80"
+          rx="9"
+          ry="5.5"
+          fill={style.blushColor}
+          fillOpacity={style.blushOpacity}
+        />
 
-          {/* 1. Cute Soft Ears */}
-          <ellipse cx="26" cy="74" rx="8" ry="12" fill={style.skinGradEnd} stroke="#E2D9F3" strokeWidth="1.5" />
-          <ellipse cx="134" cy="74" rx="8" ry="12" fill={style.skinGradEnd} stroke="#E2D9F3" strokeWidth="1.5" />
+        {/* Facial Features */}
+        {renderEyebrows()}
+        {renderEyes()}
+        {renderMouth()}
+      </svg>
 
-          {/* 2. Main Friendly Face Canvas (Soft Rounded Aesthetic) */}
-          <rect
-            x="28"
-            y="26"
-            width="104"
-            height="102"
-            rx="50"
-            fill="url(#avatarSkinGrad)"
-            stroke="rgba(255, 255, 255, 0.85)"
-            strokeWidth="2.5"
-            style={{
-              filter: 'drop-shadow(0 6px 16px rgba(120, 100, 160, 0.12))',
-              transition: 'all 450ms ease',
-            }}
-          />
-
-          {/* Subtle Top Gloss Arc */}
-          <path
-            d="M 44 38 Q 80 30 116 38"
-            stroke="rgba(255, 255, 255, 0.65)"
-            strokeWidth="3"
-            strokeLinecap="round"
-            fill="none"
-          />
-
-          {/* 3. Rosy Cheeks (Blush) */}
-          <ellipse
-            cx="46"
-            cy="78"
-            rx="8"
-            ry="5"
-            fill={style.blushColor}
-            opacity={style.blushOpacity}
-            filter="url(#blushGlow)"
-            style={{ transition: 'all 400ms ease' }}
-          />
-          <ellipse
-            cx="114"
-            cy="78"
-            rx="8"
-            ry="5"
-            fill={style.blushColor}
-            opacity={style.blushOpacity}
-            filter="url(#blushGlow)"
-            style={{ transition: 'all 400ms ease' }}
-          />
-
-          {/* 4. Expressive Eyebrows */}
-          <g style={{ transition: 'all 350ms ease' }}>
-            {renderEyebrows()}
-          </g>
-
-          {/* 5. Expressive Eyes & Eyelids */}
-          <g style={{ transition: 'all 350ms ease' }}>
-            {renderEyes()}
-          </g>
-
-          {/* 6. Cute Little Button Nose */}
-          <ellipse cx="80" cy="76" rx="2.5" ry="1.8" fill={style.featureColor} opacity="0.35" />
-
-          {/* 7. Expressive Animated Mouth */}
-          <g style={{ transition: 'all 250ms ease' }}>
-            {renderMouth()}
-          </g>
-
-          {/* 8. Listening / Thinking Status Indicators */}
-          {state === 'thinking' && (
-            <g>
-              <circle cx="80" cy="18" r="4" fill={style.featureColor} opacity="0.8" />
-              <circle cx="68" cy="18" r="3" fill={style.featureColor} opacity="0.5" />
-              <circle cx="92" cy="18" r="3" fill={style.featureColor} opacity="0.5" />
-            </g>
-          )}
-
-          {state === 'listening' && (
-            <circle
-              cx="80"
-              cy="18"
-              r="4.5"
-              fill="#63D8A5"
-              className="animate-antenna-pulse"
-            />
-          )}
-        </svg>
-      </div>
-
-      {/* Soft Ground Shadow */}
-      <div
-        style={{
-          width: `${width * 0.55}px`,
-          height: '7px',
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse, rgba(120, 100, 180, 0.22) 0%, transparent 70%)',
-          marginTop: '-3px',
-          filter: 'blur(2px)',
-        }}
-      />
-
-      {/* Manual Override & Mood Toggle Controls (if enabled) */}
+      {/* Optional Companion Controls / Info */}
       {showControls && (
         <div
           style={{
-            marginTop: '8px',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.78rem',
+            gap: '8px',
+            marginTop: '6px',
+            fontSize: '0.8rem',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                cursor: 'pointer',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={autoMoodEnabled}
-                onChange={onToggleAutoMood}
-                style={{ cursor: 'pointer' }}
-              />
-              Auto Mood
-            </label>
-
-            <select
-              value={manualOverrideEmotion || ''}
-              onChange={(e) => {
-                const val = e.target.value as AvatarExpression;
-                if (onSetOverrideEmotion) {
-                  onSetOverrideEmotion(val ? val : null);
-                }
-              }}
-              className="select-input"
-              style={{
-                padding: '2px 8px',
-                fontSize: '0.75rem',
-                borderRadius: '8px',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-              }}
-              aria-label="Override Avatar Facial Expression"
-            >
-              <option value="">(Auto: {style.label})</option>
-              <option value="happy">Happy 😊</option>
-              <option value="excited">Excited 🤩</option>
-              <option value="calm">Calm 😌</option>
-              <option value="sad">Sad 🥺</option>
-              <option value="frustrated">Frustrated 😤</option>
-              <option value="confused">Confused 🤨</option>
-              <option value="neutral">Neutral 😐</option>
-            </select>
-          </div>
+          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+            Emoji Companion: {style.label}
+          </span>
         </div>
       )}
+    </div>
+  );
+};
+
+/**
+ * Universal Compact Companion Avatar Icon
+ * Automatically renders either Emoji or Human-Like avatar in compact dimensions (e.g., 32px or 44px).
+ */
+export const CompanionMiniAvatar: React.FC<{
+  size?: number;
+  emotion?: string;
+  state?: CompanionState;
+}> = ({ size = 32, emotion = 'neutral', state = 'idle' }) => {
+  const [prefs, setPrefs] = useState(() => getAvatarPreferences());
+
+  useEffect(() => {
+    const handlePrefChange = (e: any) => {
+      if (e.detail) setPrefs(e.detail);
+    };
+    window.addEventListener('ai_friend_avatar_prefs_changed', handlePrefChange);
+    return () => window.removeEventListener('ai_friend_avatar_prefs_changed', handlePrefChange);
+  }, []);
+
+  const normalized = (prefs.avatarMoodOverride && prefs.avatarMoodOverride !== 'auto')
+    ? normalizeExpression(prefs.avatarMoodOverride)
+    : (prefs.autoMoodEnabled !== false)
+    ? normalizeExpression(emotion)
+    : 'neutral';
+
+  // Emoji mini avatar
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--current-pastel-gradient, linear-gradient(135deg, #9D8DF1, #78C6F1))',
+        boxShadow: '0 2px 8px rgba(157, 141, 241, 0.3)',
+        flexShrink: 0,
+      }}
+    >
+      <EmotionalAvatar
+        emotion={normalized}
+        state={state}
+        size={size * 1.1}
+        showControls={false}
+      />
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ChatMessage } from '../../services/api';
 import { translations } from '../../services/i18n';
+import { EmotionalAvatar, CompanionMiniAvatar, type CompanionState } from '../Avatar/EmotionalAvatar';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -11,42 +12,17 @@ interface ChatViewProps {
   currentlySpeakingMsgId?: string | null;
   audioLoadingMsgId?: string | null;
   language: string;
+  companionEmotion?: string;
+  companionState?: CompanionState;
+  personaName?: string;
+  onOpenSettings?: () => void;
+  onOpenAiSettings?: () => void;
+  onNavigateTab?: (mode: 'games' | 'study' | 'memories' | 'voice') => void;
+  conversationMode?: 'normal' | 'dump';
+  onToggleConversationMode?: (mode: 'normal' | 'dump') => void;
+  moodLabel?: string;
+  companionName?: string;
 }
-
-// Mini Animated Companion Portrait for Chat View
-const CompanionMiniAvatar: React.FC<{ size?: number }> = ({ size = 32 }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 32 32"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    style={{ flexShrink: 0, borderRadius: '50%', boxShadow: '0 2px 10px rgba(157, 141, 241, 0.3)' }}
-    aria-label="AI Companion"
-  >
-    <defs>
-      <linearGradient id="miniAvatarBg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#9D8DF1" />
-        <stop offset="100%" stopColor="#78C6F1" />
-      </linearGradient>
-      <linearGradient id="miniFaceBg" x1="0" y1="6" x2="0" y2="28" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#FFF9F0" />
-        <stop offset="100%" stopColor="#FFEAD4" />
-      </linearGradient>
-    </defs>
-    <circle cx="16" cy="16" r="15" fill="url(#miniAvatarBg)" />
-    <circle cx="16" cy="16" r="11.5" fill="url(#miniFaceBg)" />
-    <ellipse cx="11" cy="18" rx="2.2" ry="1.2" fill="#FA9F7A" fillOpacity="0.55" />
-    <ellipse cx="21" cy="18" rx="2.2" ry="1.2" fill="#FA9F7A" fillOpacity="0.55" />
-    <circle cx="12" cy="14" r="1.6" fill="#4A3225" />
-    <circle cx="20" cy="14" r="1.6" fill="#4A3225" />
-    <circle cx="11.5" cy="13.5" r="0.6" fill="#FFFFFF" />
-    <circle cx="19.5" cy="13.5" r="0.6" fill="#FFFFFF" />
-    <path d="M 10 11.2 Q 12 10.4 13.8 11.2" stroke="#6B4A38" strokeWidth="0.8" strokeLinecap="round" fill="none" />
-    <path d="M 18.2 11.2 Q 20 10.4 22 11.2" stroke="#6B4A38" strokeWidth="0.8" strokeLinecap="round" fill="none" />
-    <path d="M 13 18.5 Q 16 21 19 18.5" stroke="#4A3225" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-  </svg>
-);
 
 export const ChatView: React.FC<ChatViewProps> = ({
   messages,
@@ -57,6 +33,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
   currentlySpeakingMsgId,
   audioLoadingMsgId,
   language,
+  companionEmotion = 'neutral',
+  companionState = 'idle',
+  personaName = 'AI Friend',
+  onOpenSettings,
+  onOpenAiSettings,
+  onNavigateTab,
+  conversationMode = 'normal',
+  onToggleConversationMode,
+  moodLabel,
+  companionName,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -217,13 +203,118 @@ export const ChatView: React.FC<ChatViewProps> = ({
     <div
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        maxHeight: '640px',
+        gap: '16px',
         width: '100%',
+        height: '100%',
         background: 'transparent',
+        alignItems: 'stretch',
+        minHeight: 0,
+        overflow: 'hidden',
       }}
     >
+      {/* ─── Main Chat Column ─── */}
+      <div
+        className="glass-panel"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          flex: 1,
+          minWidth: 0,
+          borderRadius: '24px',
+          overflow: 'hidden',
+          background: 'var(--bg-surface-elevated)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-card)',
+        }}
+      >
+      {/* ─── Integrated Companion Chat Header (Requirement Part 3) ─── */}
+      <div
+        style={{
+          padding: '12px 18px',
+          borderBottom: '1px solid var(--border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--bg-surface-elevated)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: '24px 24px 0 0',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{ cursor: (onOpenAiSettings || onOpenSettings) ? 'pointer' : 'default' }}
+            onClick={onOpenAiSettings || onOpenSettings}
+            title={isTamil ? 'அவதார் & குரலை மாற்ற கிளிக் செய்யவும்' : 'Click to customize companion avatar & voice'}
+          >
+            <CompanionMiniAvatar size={42} emotion={companionEmotion} state={companionState} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ margin: 0, fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {companionName || personaName || 'AI Friend'}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  background: 'var(--current-emotion-soft)',
+                  color: 'var(--current-emotion-color)',
+                  border: '1px solid var(--border-subtle)',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--current-emotion-color)' }} />
+                <span>{moodLabel || 'Attentive & Ready'}</span>
+              </span>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+              {isTamil ? 'உணர்ச்சி சார்ந்த மெய்நிகர் தோழன்' : 'Empathetic Emotional AI Companion'}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span
+            style={{
+              fontSize: '0.74rem',
+              color: 'var(--text-secondary)',
+              background: 'var(--bg-surface-card)',
+              border: '1px solid var(--border-subtle)',
+              padding: '4px 10px',
+              borderRadius: '999px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: companionState === 'speaking' ? '#9D8DF1' : companionState === 'listening' ? '#63D8A5' : 'var(--current-emotion-color)',
+                display: 'inline-block',
+              }}
+            />
+            <span>
+              {companionState === 'speaking'
+                ? (isTamil ? 'பேசுகிறது...' : 'Speaking...')
+                : companionState === 'listening'
+                ? (isTamil ? 'கேட்கிறது...' : 'Listening...')
+                : isLoading
+                ? (isTamil ? 'சிந்திக்கிறது...' : 'Thinking...')
+                : (isTamil ? 'இணைப்பில் உள்ளது' : 'Online & Attentive')}
+            </span>
+          </span>
+        </div>
+      </div>
+
       {/* Messages Scroll Area */}
       <div
         style={{
@@ -314,12 +405,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   style={{
                     maxWidth: '540px',
                     width: '100%',
-                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.25))',
-                    border: '1px solid #F87171',
+                    background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(254, 226, 226, 0.45))',
+                    border: '1.5px solid #F87171',
                     borderRadius: '18px',
-                    padding: '14px 18px',
+                    padding: '16px 20px',
                     marginBottom: '8px',
-                    boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)',
+                    boxShadow: '0 8px 24px rgba(239, 68, 68, 0.15)',
                   }}
                 >
                   <div
@@ -327,45 +418,38 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      fontWeight: 700,
-                      color: '#EF4444',
-                      marginBottom: '6px',
+                      fontWeight: 800,
+                      color: '#DC2626',
+                      marginBottom: '8px',
+                      fontSize: '1rem',
                     }}
                   >
                     <span>🚨</span>
-                    <span>24/7 Immediate Support Available</span>
+                    <span>Emergency Parent Alert Dispatched</span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
-                    Helplines: <strong>{msg.safety_notice.crisis_helpline}</strong>
+                  <div style={{ fontSize: '0.88rem', color: 'var(--text-primary)', marginBottom: '10px', lineHeight: 1.55 }}>
+                    An immediate emergency SMS notification has been dispatched to your registered parent/guardian contact
+                    {msg.safety_notice.parent_contact_notified ? (
+                      <> (<strong>{msg.safety_notice.parent_contact_notified}</strong>)</>
+                    ) : (
+                      <> (provided during signup)</>
+                    )}.
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <a
-                      href="tel:988"
-                      className="btn-primary"
-                      style={{
-                        background: '#EF4444',
-                        padding: '6px 14px',
-                        fontSize: '0.78rem',
-                        textDecoration: 'none',
-                        borderRadius: '12px',
-                      }}
-                    >
-                      📞 Call 988
-                    </a>
-                    <a
-                      href="https://findahelpline.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-ghost"
-                      style={{
-                        padding: '6px 14px',
-                        fontSize: '0.78rem',
-                        textDecoration: 'none',
-                        borderRadius: '12px',
-                      }}
-                    >
-                      🌐 Find Local Helpline
-                    </a>
+                  <div
+                    style={{
+                      fontSize: '0.82rem',
+                      color: '#991B1B',
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <span>🛡️</span>
+                    <span>Your life is deeply valued. Please take slow, deep breaths and stay right here with me.</span>
                   </div>
                 </div>
               )}
@@ -381,7 +465,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
               >
                 {!isUser && (
                   <div style={{ flexShrink: 0, marginBottom: '2px' }}>
-                    <CompanionMiniAvatar size={32} />
+                    <CompanionMiniAvatar
+                      size={34}
+                      emotion={msg.companion_emotion || companionEmotion}
+                      state={currentlySpeakingMsgId === msg.id ? 'speaking' : 'idle'}
+                    />
                   </div>
                 )}
 
@@ -640,6 +728,336 @@ export const ChatView: React.FC<ChatViewProps> = ({
           <span>✈️</span>
         </button>
       </div>
+      </div>
+
+      {/* ─── Right Companion & Voice Call Panel (Inspired by reference mockup) ─── */}
+      <div
+        className="chat-companion-panel"
+        style={{
+          width: '290px',
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          height: '100%',
+          overflowY: 'auto',
+          paddingRight: '2px',
+        }}
+      >
+        {/* Voice Call Card */}
+        <div
+          style={{
+            background: 'var(--bg-surface-elevated)',
+            borderRadius: '22px',
+            border: '1px solid var(--border-subtle)',
+            padding: '12px 14px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            boxShadow: '0 8px 28px var(--shadow-sm)',
+            position: 'relative',
+          }}
+        >
+          {/* Encouragement bubble */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '8px',
+              right: '10px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '10px',
+              padding: '3px 7px',
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              color: 'var(--current-emotion-color)',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            {moodLabel ? `${moodLabel} 🌸` : "You're doing great! 🌸"}
+          </div>
+
+          {/* Prominent Companion Avatar (Dynamically adapts to 3D Human Avatar or Animated Emoji based on AI Settings) */}
+          <div style={{ margin: '6px 0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+            <EmotionalAvatar
+              size={135}
+              emotion={companionEmotion}
+              state={companionState}
+              showControls={false}
+            />
+            {onOpenAiSettings && (
+              <button
+                type="button"
+                onClick={onOpenAiSettings}
+                id="chat-customize-ai-btn"
+                style={{
+                  padding: '3px 12px',
+                  borderRadius: '999px',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--current-emotion-color, #6366f1)',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: 'var(--shadow-sm)',
+                  transition: 'all 150ms ease',
+                }}
+                title="Configure AI Companion, 3D Avatar & Voice"
+              >
+                <span>✨</span>
+                <span>{isTamil ? 'தோழன் அமைப்புகள்' : 'AI Settings'}</span>
+              </button>
+            )}
+          </div>
+
+          {/* Voice Call Widget Box */}
+          <div
+            style={{
+              width: '100%',
+              background: 'linear-gradient(135deg, #60a5fa, #818cf8)',
+              borderRadius: '16px',
+              padding: '12px 14px',
+              color: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 700 }}>
+                <span>💠</span>
+                <span>Voice Call</span>
+              </div>
+              <span style={{ fontSize: '0.7rem', opacity: 0.9 }}>
+                {companionState === 'speaking' ? 'Speaking' : companionState === 'listening' ? 'Listening' : 'Ready'}
+              </span>
+            </div>
+
+            {/* Audio Waveform Animation */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', height: '22px' }}>
+              {[10, 16, 22, 14, 18, 22, 13, 20, 15, 10].map((h, i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: '3px',
+                    height: companionState === 'speaking' ? `${h}px` : isRecording ? `${h * 0.8}px` : '5px',
+                    background: '#ffffff',
+                    borderRadius: '2px',
+                    transition: 'height 150ms ease',
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Call Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+              <button
+                onClick={toggleRecording}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: isRecording ? '#ef4444' : 'rgba(255, 255, 255, 0.25)',
+                  border: 'none',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                title={isRecording ? 'Stop Recording' : 'Start Recording'}
+              >
+                🎙️
+              </button>
+
+              <button
+                onClick={() => onNavigateTab?.('voice')}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  border: 'none',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                title="Open Voice Call View"
+              >
+                📞
+              </button>
+
+              <button
+                onClick={() => onSpeakMessage(isTamil ? 'வணக்கம், நான் உங்கள் தோழன்!' : 'Hello, I am listening!')}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.25)',
+                  border: 'none',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                title="Test Audio Speaker"
+              >
+                🔊
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Actions Card */}
+        <div
+          style={{
+            background: 'var(--bg-surface-elevated)',
+            borderRadius: '20px',
+            border: '1px solid var(--border-subtle)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Quick Actions
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+            <button
+              onClick={() => onNavigateTab?.('games')}
+              style={{
+                padding: '8px 4px',
+                borderRadius: '12px',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-surface-card)',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: 'var(--current-emotion-color)',
+                transition: 'all 150ms ease',
+              }}
+            >
+              <span style={{ fontSize: '1.15rem' }}>🎮</span>
+              <span>Games</span>
+            </button>
+
+            <button
+              onClick={() => onNavigateTab?.('study')}
+              style={{
+                padding: '8px 4px',
+                borderRadius: '12px',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-surface-card)',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: 'var(--current-emotion-color)',
+                transition: 'all 150ms ease',
+              }}
+            >
+              <span style={{ fontSize: '1.15rem' }}>📖</span>
+              <span>Study</span>
+            </button>
+
+            <button
+              onClick={() => onNavigateTab?.('memories')}
+              style={{
+                padding: '8px 4px',
+                borderRadius: '12px',
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-surface-card)',
+                cursor: 'pointer',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: 'var(--current-emotion-color)',
+                transition: 'all 150ms ease',
+              }}
+            >
+              <span style={{ fontSize: '1.15rem' }}>🗄️</span>
+              <span>Memory</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Conversation Mode (Normal Chat vs Dump Mode) */}
+        <div
+          style={{
+            background: 'var(--bg-surface-elevated)',
+            borderRadius: '20px',
+            border: '1px solid var(--border-subtle)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
+            Conversation Mode
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              background: 'var(--bg-surface-card)',
+              padding: '3px',
+              borderRadius: '12px',
+              border: '1px solid var(--border-subtle)',
+            }}
+          >
+            <button
+              onClick={() => onToggleConversationMode?.('normal')}
+              style={{
+                flex: 1,
+                padding: '7px 10px',
+                borderRadius: '9px',
+                border: 'none',
+                background: conversationMode === 'normal' ? 'var(--bg-surface-elevated)' : 'transparent',
+                color: conversationMode === 'normal' ? 'var(--current-emotion-color)' : 'var(--text-muted)',
+                fontWeight: 700,
+                fontSize: '0.76rem',
+                cursor: 'pointer',
+                boxShadow: conversationMode === 'normal' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                transition: 'all 150ms ease',
+              }}
+            >
+              Normal Chat
+            </button>
+            <button
+              onClick={() => onToggleConversationMode?.('dump')}
+              style={{
+                flex: 1,
+                padding: '7px 10px',
+                borderRadius: '9px',
+                border: 'none',
+                background: conversationMode === 'dump' ? 'var(--current-pastel-gradient)' : 'transparent',
+                color: conversationMode === 'dump' ? '#ffffff' : 'var(--text-muted)',
+                fontWeight: 700,
+                fontSize: '0.76rem',
+                cursor: 'pointer',
+                boxShadow: conversationMode === 'dump' ? '0 2px 8px var(--current-emotion-glow)' : 'none',
+                transition: 'all 150ms ease',
+              }}
+            >
+              Dump Mode 🤫
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
+

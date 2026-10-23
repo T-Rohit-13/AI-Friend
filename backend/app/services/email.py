@@ -31,6 +31,53 @@ class EmailService:
         return f"{base_url}?verify_token={token}"
 
     @classmethod
+    async def send_otp_email(
+        cls,
+        recipient_email: str,
+        otp_code: str,
+        display_name: str = "Friend",
+    ) -> bool:
+        """
+        Sends cryptographically secure 6-digit OTP email with 5-minute expiry.
+        Raises EmailDeliveryError if provider is misconfigured or transmission fails.
+        """
+        subject = f"{otp_code} is your AI Friend verification code"
+        plain_body = (
+            f"Hello {display_name},\n\n"
+            f"Your verification code for AI Friend is: {otp_code}\n\n"
+            f"This code will expire in 5 minutes. Please do not share this code with anyone.\n\n"
+            f"Warmly,\n"
+            f"The AI Friend Team"
+        )
+        html_body = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8f6fc; color: #2d2847; padding: 24px; }}
+            .card {{ background: #ffffff; border: 1px solid #d8d0fc; border-radius: 20px; padding: 32px; max-width: 480px; margin: 0 auto; box-shadow: 0 10px 30px rgba(139, 124, 246, 0.1); }}
+            .otp-box {{ background: linear-gradient(135deg, #cdeafc, #d8d0fc); border-radius: 12px; padding: 18px 24px; text-align: center; margin: 24px 0; letter-spacing: 8px; font-size: 32px; font-weight: 800; color: #4338ca; }}
+            .footer {{ font-size: 0.8rem; color: #6b7280; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; }}
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2 style="color: #6366f1; margin-top: 0; text-align: center;">Welcome to AI Friend 👋</h2>
+            <p>Hello <strong>{display_name}</strong>,</p>
+            <p>Use this one-time verification code to complete your signup:</p>
+            <div class="otp-box">{otp_code}</div>
+            <p style="font-size: 0.9rem; color: #4b5563; text-align: center;">This code is valid for <strong>5 minutes</strong>. For your security, never share this code.</p>
+            <div class="footer">
+              If you didn't request this code, you can safely ignore this email.
+            </div>
+          </div>
+        </body>
+        </html>
+        """
+        return await cls._dispatch_email(recipient_email, subject, plain_body, html_body)
+
+    @classmethod
     async def send_verification_email(
         cls,
         recipient_email: str,
@@ -85,9 +132,25 @@ class EmailService:
         </html>
         """
 
+        return await cls._dispatch_email(recipient_email, subject, plain_body, html_body)
+
+    @classmethod
+    async def _dispatch_email(
+        cls,
+        recipient_email: str,
+        subject: str,
+        plain_body: str,
+        html_body: str,
+    ) -> bool:
+        provider = (settings.EMAIL_PROVIDER or "console").lower()
+
+        if provider == "disabled":
+            logger.warning("Email delivery is disabled by configuration.")
+            return True
+
         if provider == "console":
             # Development/Testing mode: logs receipt confirmation without exposing secrets
-            logger.info(f"Verification email generated for recipient: {recipient_email} [Provider: console]")
+            logger.info(f"Verification email generated for recipient: {recipient_email} [Subject: {subject}] [Provider: console]")
             return True
 
         elif provider == "smtp":
@@ -120,12 +183,13 @@ class EmailService:
                         server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
                         server.sendmail(settings.EMAIL_FROM, [recipient_email], msg.as_string())
 
-                logger.info(f"Verification email successfully dispatched via SMTP to {recipient_email}")
+                logger.info(f"Email successfully dispatched via SMTP to {recipient_email}")
                 return True
 
             except Exception as e:
-                logger.error(f"Failed to deliver verification email via SMTP: {str(e)}")
+                logger.error(f"Failed to deliver email via SMTP: {str(e)}")
                 raise EmailDeliveryError(f"Email delivery failed: {str(e)}")
 
         else:
             raise EmailDeliveryError(f"Unsupported EMAIL_PROVIDER '{provider}'. Must be 'console', 'smtp', or 'disabled'.")
+

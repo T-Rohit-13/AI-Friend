@@ -7,6 +7,7 @@ class SessionCreate(BaseModel):
     title: Optional[str] = "New Conversation"
     persona: str = "friendly_companion"
     language: str = "en"
+    mode: str = "normal"  # "normal" or "dump"
 
 
 class SessionResponse(BaseModel):
@@ -15,6 +16,8 @@ class SessionResponse(BaseModel):
     title: str
     persona: str
     language: str
+    mode: str = "normal"
+    dominant_mood: str = "neutral"
     created_at: datetime
     updated_at: datetime
 
@@ -23,7 +26,7 @@ class SessionResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str = Field(..., min_length=1)
-    mode: str = Field(default="chat")  # "chat", "voice", "game", "study"
+    mode: str = Field(default="chat")  # "chat", "voice", "game", "study", "dump"
     detected_emotion: Optional[str] = None
     emotion_confidence: Optional[float] = None
 
@@ -32,6 +35,9 @@ class SafetyNotice(BaseModel):
     is_crisis: bool = False
     crisis_helpline: Optional[str] = None
     resources: List[str] = []
+    parent_alert_sent: bool = False
+    parent_contact_notified: Optional[str] = None
+    alert_status: Optional[str] = None
 
 
 class ChatTurnResponse(BaseModel):
@@ -43,6 +49,7 @@ class ChatTurnResponse(BaseModel):
     companion_emotion: str = "neutral"
     user_emotion: Optional[str] = "neutral"
     safety_notice: Optional[SafetyNotice] = None
+    navigation_intent: Optional[str] = None
 
 
 class MessageResponse(BaseModel):

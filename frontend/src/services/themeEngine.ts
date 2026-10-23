@@ -52,111 +52,151 @@ export interface MoodThemeTokens {
   companionTone: string;
   /** Suggested activities */
   suggestedActivities: string[];
+  /** Ambient background gradient orbs for mood reactive UI */
+  ambientOrb1: string;
+  ambientOrb2: string;
+  ambientOrb3: string;
+  /** Gradient for buttons and highlights */
+  gradient: string;
 }
 
 // ─── Theme definitions per emotion ───
 // Research basis: COLOR_PSYCHOLOGY.md §2.2 Emotion Tone Mapping Matrix
-// NOTE: These colour choices are design hypotheses informed by research,
-// not claims that colours reliably change a person's mood.
 const EMOTION_THEMES: Record<EmotionLabel, MoodThemeTokens> = {
   neutral: {
-    emotionColor: '#78C6F1',
-    emotionGlow: 'rgba(120, 198, 241, 0.35)',
+    emotionColor: '#60A5FA',
+    emotionGlow: 'rgba(96, 165, 250, 0.40)',
     label: 'Neutral',
     animationIntensity: 0.5,
     transitionSpeed: 500,
     category: 'neutral',
-    bgTint: 'rgba(120, 198, 241, 0.04)',
+    bgTint: 'rgba(96, 165, 250, 0.05)',
     companionTone: 'attentive',
     suggestedActivities: ['Chat', 'Games', 'Study'],
+    ambientOrb1: 'rgba(191, 219, 254, 0.60)',
+    ambientOrb2: 'rgba(224, 231, 255, 0.50)',
+    ambientOrb3: 'rgba(219, 234, 254, 0.45)',
+    gradient: 'linear-gradient(135deg, #60A5FA, #818CF8)',
   },
   happy: {
     emotionColor: '#FA9F7A',
-    emotionGlow: 'rgba(250, 159, 122, 0.38)',
+    emotionGlow: 'rgba(250, 159, 122, 0.45)',
     label: 'Happy',
     animationIntensity: 0.85,
     transitionSpeed: 450,
     category: 'positive',
-    bgTint: 'rgba(250, 159, 122, 0.05)',
+    bgTint: 'rgba(250, 159, 122, 0.08)',
     companionTone: 'celebratory',
     suggestedActivities: ['Games', 'Riddles', 'Tell a joke'],
+    ambientOrb1: 'rgba(254, 240, 138, 0.65)',
+    ambientOrb2: 'rgba(254, 215, 170, 0.60)',
+    ambientOrb3: 'rgba(253, 230, 138, 0.50)',
+    gradient: 'linear-gradient(135deg, #FA9F7A, #F59E0B)',
   },
   sad: {
     emotionColor: '#9D8DF1',
-    emotionGlow: 'rgba(157, 141, 241, 0.35)',
+    emotionGlow: 'rgba(157, 141, 241, 0.40)',
     label: 'Sad',
     animationIntensity: 0.35,
     transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(157, 141, 241, 0.04)',
+    bgTint: 'rgba(157, 141, 241, 0.06)',
     companionTone: 'compassionate',
     suggestedActivities: ['Quiet conversation', 'Breathing exercise', 'Gentle riddle'],
+    ambientOrb1: 'rgba(221, 214, 254, 0.65)',
+    ambientOrb2: 'rgba(199, 210, 254, 0.55)',
+    ambientOrb3: 'rgba(233, 213, 255, 0.45)',
+    gradient: 'linear-gradient(135deg, #9D8DF1, #6366F1)',
   },
   angry: {
     emotionColor: '#EF5350',
-    emotionGlow: 'rgba(239, 83, 80, 0.38)',
+    emotionGlow: 'rgba(239, 83, 80, 0.42)',
     label: 'Frustrated',
     animationIntensity: 0.4,
     transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(239, 83, 80, 0.04)',
+    bgTint: 'rgba(239, 83, 80, 0.06)',
     companionTone: 'patient',
     suggestedActivities: ['Breathing exercise', 'Quiet conversation', 'Simple game'],
+    ambientOrb1: 'rgba(254, 205, 211, 0.65)',
+    ambientOrb2: 'rgba(254, 215, 170, 0.50)',
+    ambientOrb3: 'rgba(254, 226, 226, 0.45)',
+    gradient: 'linear-gradient(135deg, #EF5350, #F97316)',
   },
   anxious: {
     emotionColor: '#818CF8',
-    emotionGlow: 'rgba(129, 140, 248, 0.35)',
+    emotionGlow: 'rgba(129, 140, 248, 0.42)',
     label: 'Anxious',
     animationIntensity: 0.35,
     transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(129, 140, 248, 0.04)',
+    bgTint: 'rgba(129, 140, 248, 0.06)',
     companionTone: 'grounding',
     suggestedActivities: ['Breathing exercise', 'Grounding activity', 'Calm conversation'],
+    ambientOrb1: 'rgba(224, 231, 255, 0.65)',
+    ambientOrb2: 'rgba(199, 210, 254, 0.55)',
+    ambientOrb3: 'rgba(165, 180, 252, 0.45)',
+    gradient: 'linear-gradient(135deg, #818CF8, #38BDF8)',
   },
   calm: {
-    emotionColor: '#63D8A5',
-    emotionGlow: 'rgba(99, 216, 165, 0.35)',
+    emotionColor: '#34D399',
+    emotionGlow: 'rgba(52, 211, 153, 0.40)',
     label: 'Calm',
     animationIntensity: 0.45,
     transitionSpeed: 500,
     category: 'neutral',
-    bgTint: 'rgba(99, 216, 165, 0.04)',
+    bgTint: 'rgba(52, 211, 153, 0.06)',
     companionTone: 'peaceful',
     suggestedActivities: ['Study', 'Conversation', 'Riddles'],
+    ambientOrb1: 'rgba(167, 243, 208, 0.65)',
+    ambientOrb2: 'rgba(186, 230, 253, 0.55)',
+    ambientOrb3: 'rgba(209, 250, 229, 0.45)',
+    gradient: 'linear-gradient(135deg, #34D399, #60A5FA)',
   },
   surprised: {
     emotionColor: '#FFB74D',
-    emotionGlow: 'rgba(255, 183, 77, 0.40)',
+    emotionGlow: 'rgba(255, 183, 77, 0.45)',
     label: 'Excited',
     animationIntensity: 0.85,
     transitionSpeed: 450,
     category: 'positive',
-    bgTint: 'rgba(255, 183, 77, 0.05)',
+    bgTint: 'rgba(255, 183, 77, 0.08)',
     companionTone: 'playful',
     suggestedActivities: ['Riddles', 'Trivia', 'Explore a topic'],
+    ambientOrb1: 'rgba(254, 240, 138, 0.65)',
+    ambientOrb2: 'rgba(254, 215, 170, 0.55)',
+    ambientOrb3: 'rgba(252, 211, 77, 0.45)',
+    gradient: 'linear-gradient(135deg, #FFB74D, #F43F5E)',
   },
   frustrated: {
     emotionColor: '#EF5350',
-    emotionGlow: 'rgba(239, 83, 80, 0.38)',
+    emotionGlow: 'rgba(239, 83, 80, 0.42)',
     label: 'Frustrated',
     animationIntensity: 0.4,
     transitionSpeed: 600,
     category: 'low',
-    bgTint: 'rgba(239, 83, 80, 0.04)',
+    bgTint: 'rgba(239, 83, 80, 0.06)',
     companionTone: 'patient',
     suggestedActivities: ['Break activity', 'Simple game', 'Breathing exercise'],
+    ambientOrb1: 'rgba(254, 205, 211, 0.65)',
+    ambientOrb2: 'rgba(254, 215, 170, 0.50)',
+    ambientOrb3: 'rgba(254, 226, 226, 0.45)',
+    gradient: 'linear-gradient(135deg, #EF5350, #F97316)',
   },
   uncertain: {
     emotionColor: '#94A3B8',
-    emotionGlow: 'rgba(148, 163, 184, 0.30)',
+    emotionGlow: 'rgba(148, 163, 184, 0.35)',
     label: 'Mood uncertain',
     animationIntensity: 0.35,
     transitionSpeed: 500,
     category: 'uncertain',
-    bgTint: 'rgba(148, 163, 184, 0.03)',
+    bgTint: 'rgba(148, 163, 184, 0.04)',
     companionTone: 'attentive',
     suggestedActivities: ['Chat', 'Games'],
+    ambientOrb1: 'rgba(241, 245, 249, 0.65)',
+    ambientOrb2: 'rgba(226, 232, 240, 0.55)',
+    ambientOrb3: 'rgba(248, 250, 252, 0.45)',
+    gradient: 'linear-gradient(135deg, #94A3B8, #64748B)',
   },
 };
 
@@ -346,10 +386,23 @@ export class ThemeEngine {
 
     root.style.setProperty('--current-emotion-color', tokens.emotionColor);
     root.style.setProperty('--current-emotion-glow', tokens.emotionGlow);
-    root.style.setProperty('--current-emotion-soft', `${tokens.emotionColor}20`);
+    root.style.setProperty('--current-emotion-soft', `${tokens.emotionColor}24`);
     root.style.setProperty('--mood-bg-tint', tokens.bgTint);
     root.style.setProperty('--mood-animation-intensity', String(tokens.animationIntensity));
     root.style.setProperty('--mood-transition-speed', `${tokens.transitionSpeed}ms`);
+    root.style.setProperty('--current-pastel-gradient', tokens.gradient);
+
+    // Apply mood ambient orbs with theme adaptation (deep aura in dark mode, radiant pastel in light)
+    const isDark = this._userTheme === 'dark' || this._userTheme === 'calm';
+    if (isDark) {
+      root.style.setProperty('--ambient-orb-1', tokens.ambientOrb1.replace(/0\.\d+\)/, '0.24)'));
+      root.style.setProperty('--ambient-orb-2', tokens.ambientOrb2.replace(/0\.\d+\)/, '0.18)'));
+      root.style.setProperty('--ambient-orb-3', tokens.ambientOrb3.replace(/0\.\d+\)/, '0.16)'));
+    } else {
+      root.style.setProperty('--ambient-orb-1', tokens.ambientOrb1);
+      root.style.setProperty('--ambient-orb-2', tokens.ambientOrb2);
+      root.style.setProperty('--ambient-orb-3', tokens.ambientOrb3);
+    }
 
     // Set mood data attribute for CSS selectors
     const mood = this.getEffectiveMood();

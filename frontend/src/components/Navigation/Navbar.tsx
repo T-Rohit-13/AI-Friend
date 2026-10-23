@@ -1,7 +1,7 @@
 import React from 'react';
 import { translations } from '../../services/i18n';
 
-export type AppMode = 'chat' | 'voice' | 'games' | 'study' | 'memories';
+export type AppMode = 'chat' | 'voice' | 'games' | 'study' | 'memories' | 'ai-settings';
 
 interface NavbarProps {
   currentMode: AppMode;
@@ -21,11 +21,13 @@ interface NavbarProps {
   onLogout: () => void;
   userMood?: string;
   onOpenSettings?: () => void;
+  onOpenAiSettings?: () => void;
   onOpenDevPanel?: () => void;
+  companionName?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentMode,
+  currentMode: _currentMode,
   onSelectMode,
   language,
   onLanguageChange,
@@ -42,7 +44,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   userMood = 'neutral',
   onOpenSettings,
+  onOpenAiSettings: _onOpenAiSettings,
   onOpenDevPanel,
+  companionName = 'AI Friend',
 }) => {
   // UI chrome is strictly English per design requirements
   const t = translations.en;
@@ -60,31 +64,23 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'playful_gamer', name: 'Playful Gamer 🎮' },
   ];
 
-  const modes: { id: AppMode; label: string; icon: string }[] = [
-    { id: 'chat', label: t.tabChat, icon: '💬' },
-    { id: 'voice', label: t.tabVoice, icon: '🎙️' },
-    { id: 'games', label: t.tabGames, icon: '🎮' },
-    { id: 'study', label: t.tabStudy, icon: '📚' },
-    { id: 'memories', label: t.tabMemories, icon: '🧠' },
-  ];
-
-
   return (
     <header
-      className="glass-panel"
+      className="glass-panel app-header-navbar"
       style={{
-        margin: '12px 16px',
-        padding: '10px 20px',
+        margin: '6px 16px 2px',
+        padding: '8px 18px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '12px',
-        borderRadius: '22px',
+        borderRadius: '20px',
         zIndex: 50,
+        flexShrink: 0,
       }}
     >
-      {/* Brand & Companion Emblem */}
+      {/* Brand & Companion Emblem with Custom Companion Name */}
       <div
         style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
         onClick={() => onSelectMode('chat')}
@@ -96,8 +92,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       >
         <div
           style={{
-            width: '42px',
-            height: '42px',
+            width: '40px',
+            height: '40px',
             borderRadius: '14px',
             background: 'linear-gradient(135deg, var(--pastel-lavender-accent), var(--pastel-sky-accent))',
             display: 'flex',
@@ -108,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             transition: 'transform 200ms ease',
           }}
         >
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AI Companion Logo">
+          <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AI Companion Logo">
             <circle cx="16" cy="16" r="13" fill="#FFF9F0" />
             <ellipse cx="11" cy="18" rx="2.5" ry="1.2" fill="#FA9F7A" fillOpacity="0.6" />
             <ellipse cx="21" cy="18" rx="2.5" ry="1.2" fill="#FA9F7A" fillOpacity="0.6" />
@@ -132,7 +128,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               fontFamily: 'var(--font-display)',
             }}
           >
-            AI Friend
+            {companionName || 'AI Friend'}
             <span
               style={{
                 fontSize: '0.68rem',
@@ -153,53 +149,15 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Feature Mode Switcher Tabs */}
-      <nav
-        aria-label="Navigation Tabs"
+      {/* Settings & Controls Strip */}
+      <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '6px',
-          background: 'rgba(157, 141, 241, 0.08)',
-          padding: '4px',
-          borderRadius: '16px',
-          border: '1px solid var(--border-subtle)',
+          gap: '8px',
+          flexWrap: 'wrap',
         }}
       >
-        {modes.map((m) => {
-          const isActive = currentMode === m.id;
-          return (
-            <button
-              key={m.id}
-              onClick={() => onSelectMode(m.id)}
-              aria-current={isActive ? 'page' : undefined}
-              style={{
-                border: 'none',
-                background: isActive
-                  ? 'linear-gradient(135deg, var(--current-emotion-color), #7461DE)'
-                  : 'transparent',
-                color: isActive ? '#FFFFFF' : 'var(--text-secondary)',
-                padding: '7px 14px',
-                borderRadius: '12px',
-                fontSize: '0.825rem',
-                fontWeight: isActive ? 700 : 500,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 200ms ease',
-                boxShadow: isActive ? '0 4px 14px var(--current-emotion-glow)' : 'none',
-              }}
-            >
-              <span>{m.icon}</span>
-              <span className="mode-label">{m.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Settings / Controls Strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {/* Persona Select */}
         <select
           value={persona}
@@ -290,6 +248,21 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
+
+        {/* General App Settings Button */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            className="btn-ghost"
+            id="navbar-settings-btn"
+            style={{ padding: '7px 10px', fontSize: '1rem', cursor: 'pointer' }}
+            title="App Settings (Theme, Font, Display)"
+            aria-label="Open App Settings"
+          >
+            ⚙️
+          </button>
+        )}
+
         {/* Developer Testing Panel Button */}
         {onOpenDevPanel && (
           <button
@@ -304,17 +277,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
-        {/* Settings Button */}
-        <button
-          onClick={onOpenSettings}
-          className="btn-ghost"
-          id="settings-open-btn"
-          style={{ padding: '7px 10px', fontSize: '1rem' }}
-          title={isTamil ? 'அமைப்புகள் (Alt+S)' : 'Settings & Appearance (Alt+S)'}
-          aria-label="Open settings"
-        >
-          ⚙️
-        </button>
+
 
         {/* User Profile / Auth Button */}
         {user ? (

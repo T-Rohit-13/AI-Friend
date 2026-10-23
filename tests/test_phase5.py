@@ -181,4 +181,4 @@ async def test_chat_crisis_override_still_protected():
         assert data["companion_emotion"] == "compassionate"
         assert data["safety_notice"] is not None
         assert data["safety_notice"]["is_crisis"] is True
-        assert "988" in data["content"]
+        assert "parent" in data["content"].lower() or "sms" in data["content"].lower()

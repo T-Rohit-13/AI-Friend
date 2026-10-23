@@ -183,13 +183,21 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  min-height: 100vh;
-  overflow-x: hidden;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
   transition: background-color 600ms var(--ease-smooth), color 400ms var(--ease-smooth);
   position: relative;
+}
+
+html[data-font-size='large'] {
+  font-size: 17.5px;
+}
+html[data-font-size='xlarge'] {
+  font-size: 19px;
 }
 
 /* Accessible Focus Indicator */
@@ -256,7 +264,9 @@ body::after {
 #root {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -445,7 +455,13 @@ html[lang="ta"] body, .tamil-mode p, .tamil-mode span, .tamil-mode button {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
+  .left-sidebar-nav {
+    display: none !important;
+  }
+  .chat-companion-panel {
+    display: none !important;
+  }
   .mode-label {
     display: none;
   }
@@ -453,3 +469,87 @@ html[lang="ta"] body, .tamil-mode p, .tamil-mode span, .tamil-mode button {
     border-radius: 18px;
   }
 }
+
+
+/* ─── High-Fidelity Human Avatar & Game Animations ─── */
+@keyframes avatarBreathe {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.02);
+  }
+}
+
+@keyframes pulseAura {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.95;
+  }
+}
+
+@keyframes subtleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes tttPop {
+  0% {
+    transform: scale(0.4) rotate(-10deg);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.15) rotate(4deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes rpsThrow {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translateY(-16px) rotate(-12deg) scale(1.1);
+  }
+  50% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  75% {
+    transform: translateY(-16px) rotate(12deg) scale(1.1);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes cardShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes winCelebrate {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(245, 158, 11, 0.6);
+  }
+}
+

@@ -10,6 +10,9 @@ export interface SafetyNotice {
   is_crisis: boolean;
   crisis_helpline?: string;
   resources: string[];
+  parent_alert_sent?: boolean;
+  parent_contact_notified?: string | null;
+  alert_status?: string | null;
 }
 
 export interface ChatTurnResponse {
@@ -21,6 +24,7 @@ export interface ChatTurnResponse {
   companion_emotion: string;
   user_emotion?: string;
   safety_notice?: SafetyNotice | null;
+  navigation_intent?: string | null;
 }
 
 export interface UserProfile {
@@ -124,7 +128,10 @@ export const api = {
     email: string,
     password: string,
     displayName: string,
-    preferredLanguage = 'en'
+    preferredLanguage = 'en',
+    confirmPassword?: string,
+    phoneNumber?: string,
+    parentPhoneNumber?: string
   ): Promise<{ access_token: string; user: UserProfile; verification_required?: boolean; message?: string }> {
     const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
       method: 'POST',
@@ -132,8 +139,11 @@ export const api = {
       body: JSON.stringify({
         email,
         password,
+        confirm_password: confirmPassword || password,
         display_name: displayName,
         preferred_language: preferredLanguage,
+        phone_number: phoneNumber || undefined,
+        parent_phone_number: parentPhoneNumber || undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -141,6 +151,33 @@ export const api = {
       throw new Error(extractErrorMessage(data, 'Registration failed. Email may already be in use.'));
     }
     setAuthToken(data.access_token);
+    return data;
+  },
+
+  async verifyOtp(email: string, otp: string): Promise<{ access_token: string; user: UserProfile; verification_required?: boolean; message?: string }> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, 'Invalid or expired verification code.'));
+    }
+    setAuthToken(data.access_token);
+    return data;
+  },
+
+  async resendOtp(email: string): Promise<{ status: string; message: string; email: string; resend_cooldown_seconds: number }> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/resend-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, 'Failed to resend verification code.'));
+    }
     return data;
   },
 
@@ -274,8 +311,12 @@ export const api = {
     return await res.json();
   },
 
-  getTtsAudioUrl(text: string, language = 'en'): string {
-    return `${API_BASE_URL}/api/v1/voice/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
+  getTtsAudioUrl(text: string, language = 'en', voice?: string): string {
+    let url = `${API_BASE_URL}/api/v1/voice/tts?text=${encodeURIComponent(text)}&language=${encodeURIComponent(language)}`;
+    if (voice) {
+      url += `&voice=${encodeURIComponent(voice)}`;
+    }
+    return url;
   },
 
   getBaseUrl(): string {
@@ -285,13 +326,13 @@ export const api = {
   // -------------------------------------------------------------
   // Chat & Conversation
   // -------------------------------------------------------------
-  async createSession(title = 'New Conversation', language = 'en', persona = 'friendly_companion') {
+  async createSession(title = 'New Conversation', language = 'en', persona = 'friendly_companion', mode = 'normal') {
     try {
       await this.ensureAuthenticated();
       let res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ title, language, persona }),
+        body: JSON.stringify({ title, language, persona, mode }),
       });
 
       // Handle token expiration
@@ -301,7 +342,7 @@ export const api = {
         res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions`, {
           method: 'POST',
           headers: headers(),
-          body: JSON.stringify({ title, language, persona }),
+          body: JSON.stringify({ title, language, persona, mode }),
         });
       }
 
@@ -316,6 +357,7 @@ export const api = {
       title,
       language,
       persona,
+      mode,
       created_at: new Date().toISOString(),
     };
   },
@@ -325,34 +367,15 @@ export const api = {
     content: string,
     language = 'en',
     detectedEmotion = 'neutral',
+    mode = 'normal',
   ): Promise<ChatTurnResponse> {
-    // Safety check fallback for crisis detection
-    const lower = content.toLowerCase();
-    if (lower.includes('kill myself') || lower.includes('suicide') || lower.includes('end my life')) {
-      return {
-        message_id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content:
-          "I am so sorry that you are feeling this heavy pain, but your life is deeply valuable. " +
-          "As an AI companion, I cannot provide medical care. Please contact trained professionals right now: " +
-          "Call or text 988 (US/Canada), 112 (Europe), or 9152987821 (India Tele-MANAS). Help is available 24/7.",
-        language,
-        companion_emotion: 'compassionate',
-        safety_notice: {
-          is_crisis: true,
-          crisis_helpline: '988 (US/Canada) | 112 (EU) | 9152987821 (India Tele-MANAS)',
-          resources: ['https://988lifeline.org', 'https://findahelpline.com'],
-        },
-      };
-    }
-
     try {
       await this.ensureAuthenticated();
 
       // If session is local or missing, create a real backend session first
       let targetSessionId = sessionId;
       if (!targetSessionId || targetSessionId.startsWith('local-session-')) {
-        const newSess = await this.createSession('AI Friend Session', language);
+        const newSess = await this.createSession('AI Friend Session', language, 'friendly_companion', mode);
         if (newSess?.id && !newSess.id.startsWith('local-session-')) {
           targetSessionId = newSess.id;
         }
@@ -363,7 +386,7 @@ export const api = {
         headers: headers(),
         body: JSON.stringify({
           content,
-          mode: 'chat',
+          mode: mode,
           detected_emotion: detectedEmotion,
         }),
       });
@@ -373,14 +396,14 @@ export const api = {
         this.logout();
         await this.ensureAuthenticated();
         // Also re-create session under new user
-        const newSess = await this.createSession('AI Friend Session', language);
+        const newSess = await this.createSession('AI Friend Session', language, 'friendly_companion', mode);
         targetSessionId = newSess.id;
         res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${targetSessionId}/messages`, {
           method: 'POST',
           headers: headers(),
           body: JSON.stringify({
             content,
-            mode: 'chat',
+            mode: mode,
             detected_emotion: detectedEmotion,
           }),
         });
@@ -412,6 +435,47 @@ export const api = {
         companion_emotion: 'warm',
       };
     }
+  },
+
+  async getChatHistoryByMood(): Promise<Record<string, Array<{
+    id: string;
+    title: string;
+    persona: string;
+    language: string;
+    mode: string;
+    dominant_mood: string;
+    message_count: number;
+    last_message_preview?: string;
+    updated_at: string;
+    created_at: string;
+  }>>> {
+    try {
+      await this.ensureAuthenticated();
+      const res = await fetch(`${API_BASE_URL}/api/v1/chat/history/by-mood`, {
+        headers: headers(),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch chat history by mood:', e);
+    }
+    return { happy: [], calm: [], sad: [], stressed: [], excited: [], neutral: [] };
+  },
+
+  async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+    try {
+      await this.ensureAuthenticated();
+      const res = await fetch(`${API_BASE_URL}/api/v1/chat/sessions/${sessionId}/messages`, {
+        headers: headers(),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch session messages:', e);
+    }
+    return [];
   },
 
   // -------------------------------------------------------------
@@ -482,6 +546,37 @@ export const api = {
     };
   },
 
+  async generateQuiz(subject: string, num_questions = 3) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/study/quiz`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ subject, num_questions }),
+      });
+      if (res.ok) return await res.json();
+    } catch {}
+    return {
+      subject,
+      cards: [
+        {
+          id: 1,
+          question: `What is the core foundational principle behind ${subject}?`,
+          key_takeaway: `Understanding how components interact under changing conditions is central to ${subject}.`,
+        },
+        {
+          id: 2,
+          question: `What is one common misconception people have about ${subject}?`,
+          key_takeaway: 'People often assume it operates independently, but in practice it depends closely on environmental context.',
+        },
+        {
+          id: 3,
+          question: `How does ${subject} apply to everyday modern life?`,
+          key_takeaway: 'It directly influences how modern digital and physical technologies optimize performance.',
+        },
+      ],
+    };
+  },
+
   // -------------------------------------------------------------
   // Transparent Memory Vault
   // -------------------------------------------------------------
@@ -543,4 +638,38 @@ export const api = {
     localStorage.removeItem('aifriend_local_memories');
     return true;
   },
+
+  // -------------------------------------------------------------
+  // Settings & Preferences
+  // -------------------------------------------------------------
+  async getPreferences(): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/settings/preferences`, {
+        headers: headers(),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('Failed to fetch remote preferences:', err);
+    }
+    return null;
+  },
+
+  async updatePreferences(payload: Record<string, any>): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/settings/preferences`, {
+        method: 'PUT',
+        headers: headers(),
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('Failed to save remote preferences:', err);
+    }
+    return null;
+  },
 };
+

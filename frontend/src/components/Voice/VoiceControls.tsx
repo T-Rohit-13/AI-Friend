@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../services/api';
 import { getThemeEngine } from '../../services/themeEngine';
 import { AudioRecorder } from '../../services/audioRecorder';
+import { EmotionalAvatar, type CompanionState } from '../Avatar/EmotionalAvatar';
 
 interface VoiceControlsProps {
   onTranscript: (transcript: string, voiceEmotion?: string) => void;
@@ -10,6 +11,10 @@ interface VoiceControlsProps {
   language: string;
   isSpeaking: boolean;
   onInterruptSpeech: () => void;
+  companionEmotion?: string;
+  onEndCall?: () => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
 export const VoiceControls: React.FC<VoiceControlsProps> = ({
@@ -19,6 +24,10 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
   language = 'en',
   isSpeaking,
   onInterruptSpeech,
+  companionEmotion = 'neutral',
+  onEndCall,
+  isMuted = false,
+  onToggleMute,
 }) => {
   const [interimText, setInterimText] = useState('');
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
@@ -262,75 +271,212 @@ export const VoiceControls: React.FC<VoiceControlsProps> = ({
     };
   }, [isListening, isTamil]);
 
+  const currentCompanionState: CompanionState = isSpeaking
+    ? 'speaking'
+    : isListening
+    ? 'listening'
+    : isProcessingAudio
+    ? 'thinking'
+    : 'idle';
+
   return (
     <div
+      className="glass-panel"
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '12px',
-        padding: '16px 20px',
-        borderRadius: '20px',
-        background: 'var(--bg-surface, #F8FAFD)',
-        border: '1px solid var(--border-subtle, rgba(0,0,0,0.06))',
+        gap: '16px',
+        padding: '24px 20px',
+        borderRadius: '24px',
         maxWidth: '560px',
         margin: '0 auto',
         width: '100%',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
+      {/* ─── Prominent Companion Avatar (Requirement Part 3 & Part 5) ─── */}
+      <div style={{ position: 'relative', marginTop: '4px' }}>
+        <EmotionalAvatar
+          emotion={companionEmotion}
+          state={currentCompanionState}
+          size={140}
+          showControls={false}
+        />
+        {/* State Badge */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: -6,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            padding: '3px 12px',
+            borderRadius: '999px',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-subtle)',
+            fontSize: '0.74rem',
+            fontWeight: 700,
+            color: isListening ? '#E53E3E' : isSpeaking ? '#9D8DF1' : isProcessingAudio ? '#F59E0B' : 'var(--text-secondary)',
+            whiteSpace: 'nowrap',
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: isListening ? '#E53E3E' : isSpeaking ? '#9D8DF1' : isProcessingAudio ? '#F59E0B' : '#38B57E',
+            }}
+          />
+          <span>
+            {isListening
+              ? (isTamil ? 'கேட்கிறது...' : 'Listening...')
+              : isProcessingAudio
+              ? (isTamil ? 'செயலாக்குகிறது...' : 'Processing audio...')
+              : isSpeaking
+              ? (isTamil ? 'பேசுகிறது...' : 'Speaking...')
+              : (isTamil ? 'தயாராக உள்ளது' : 'Ready')}
+          </span>
+        </div>
+      </div>
+
       {/* Waveform Canvas */}
       <canvas
         ref={canvasRef}
         width={320}
-        height={36}
+        height={34}
         style={{
           width: '100%',
           maxWidth: '320px',
-          height: '36px',
-          opacity: isListening ? 1 : 0.2,
+          height: '34px',
+          opacity: isListening ? 1 : 0.25,
           transition: 'opacity 300ms ease',
+          marginTop: '10px',
         }}
       />
 
-      {/* Main Record Button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      {/* Call Controls Action Bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '4px' }}>
+        {/* Mute Button */}
+        {onToggleMute && (
+          <button
+            type="button"
+            onClick={onToggleMute}
+            className="btn-ghost"
+            style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              fontSize: '1.2rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: isMuted ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-elevated)',
+              border: `1px solid ${isMuted ? '#EF4444' : 'var(--border-subtle)'}`,
+              color: isMuted ? '#EF4444' : 'var(--text-primary)',
+              cursor: 'pointer',
+            }}
+            title={isMuted ? 'Unmute companion speech' : 'Mute companion speech'}
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
+        )}
+
+        {/* Main Microphone Record / Stop Button */}
         <button
           onClick={toggleListening}
           disabled={isProcessingAudio || Boolean(pendingTranscript)}
           style={{
-            width: '64px',
-            height: '64px',
+            width: '68px',
+            height: '68px',
             borderRadius: '50%',
             background: isListening
               ? '#E53E3E'
-              : 'linear-gradient(135deg, var(--primary, #78C6F1), var(--secondary, #9D8DF1))',
+              : 'linear-gradient(135deg, var(--pastel-sky-accent, #78C6F1), var(--pastel-lavender-accent, #9D8DF1))',
             color: '#FFF',
             border: 'none',
-            fontSize: '1.6rem',
+            fontSize: '1.7rem',
             cursor: isProcessingAudio || Boolean(pendingTranscript) ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             boxShadow: isListening
-              ? '0 0 24px rgba(229, 62, 62, 0.5)'
-              : '0 8px 20px rgba(120, 198, 241, 0.35)',
+              ? '0 0 28px rgba(229, 62, 62, 0.55)'
+              : '0 8px 24px rgba(120, 198, 241, 0.4)',
             transform: isListening ? 'scale(1.08)' : 'scale(1)',
             transition: 'all 250ms ease',
           }}
-          title={isListening ? 'Click to stop and verify speech' : 'Click to talk into microphone'}
-          aria-label={isListening ? 'Stop listening' : 'Start listening'}
+          title={isListening ? 'Click to finish speech' : 'Click to talk'}
+          aria-label={isListening ? 'Stop recording' : 'Start recording'}
         >
           {isProcessingAudio ? '⏳' : isListening ? '⏹️' : '🎙️'}
         </button>
+
+        {/* Stop Speaking / Interrupt Button (only when speaking) */}
+        {isSpeaking && (
+          <button
+            type="button"
+            onClick={onInterruptSpeech}
+            className="btn-ghost"
+            style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              fontSize: '1.2rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid #EF4444',
+              color: '#EF4444',
+              cursor: 'pointer',
+            }}
+            title="Interrupt AI speech"
+            aria-label="Interrupt speech"
+          >
+            ⏸️
+          </button>
+        )}
+
+        {/* End Call Button */}
+        {onEndCall && (
+          <button
+            type="button"
+            onClick={onEndCall}
+            style={{
+              width: '46px',
+              height: '46px',
+              borderRadius: '50%',
+              fontSize: '1.2rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: '#EF4444',
+              border: 'none',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.35)',
+            }}
+            title={isTamil ? 'அழைப்பை முடிக்கவும்' : 'End Voice Call'}
+            aria-label="End Voice Call"
+          >
+            📞
+          </button>
+        )}
       </div>
 
       {/* Status Label */}
-      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-secondary, #666)' }}>
+      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-secondary, #666)', textAlign: 'center' }}>
         {isListening
           ? (isTamil ? '🎙️ கேட்கிறது (Listening in Tamil)... Click ⏹️ when done' : '🎙️ Listening in English... Click ⏹️ when done')
           : isProcessingAudio
-          ? 'Analyzing speech & acoustic tone...'
-          : (isTamil ? 'பேச மைக்ரோஃபோனைத் தட்டவும் (Tap mic to speak in Tamil)' : 'Tap mic to speak with your companion')}
+          ? (isTamil ? 'குரல் பகுப்பாய்வு செய்யப்படுகிறது...' : 'Analyzing speech & acoustic tone...')
+          : (isTamil ? 'பேச மைக்ரோஃபோனைத் தட்டவும் (Tap mic to speak)' : 'Tap mic to speak with your companion')}
       </div>
 
       {/* Live Interim Transcript Bubble */}
